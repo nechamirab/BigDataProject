@@ -1,0 +1,10 @@
+.idea/
+__pycache__/
+*.pyc
+.env
+
+# Data / run artifacts
+full_ducklake/
+favorita-grocery-sales-forecasting/
+*.parquet
+*.ducklake
