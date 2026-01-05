@@ -273,6 +273,98 @@ def analyze_yearly_distribution(con):
 
     except Exception as e:
         print(f"Could not analyze distribution: {e}")
+
+def analyze_ducklake_metadata_files(con, tables, schema: str = "main", max_print_per_table: int = 20):
+    """
+    Stage C: Query DuckLake metadata to list files for each table using ducklake_list_files,
+    and verify that returned paths are RELATIVE (not absolute).
+
+    Uses: FROM ducklake_list_files('catalog', 'table_name', schema => 'main');
+    Docs: https://ducklake.select/docs/stable/duckdb/metadata/list_files.html
+    """
+    print_header("DuckLake METADATA - List Files (Relative Path Check)")
+
+    catalog_name = "my_ducklake"  # matches ATTACH ... AS my_ducklake
+
+    def is_absolute_path(p: str) -> bool:
+        if p is None:
+            return False
+        p = str(p)
+        # Windows absolute like "C:\..." or "C:/..."
+        if len(p) >= 2 and p[1] == ":":
+            return True
+        # Unix absolute like "/..."
+        if p.startswith("/"):
+            return True
+        return False
+
+    for table in tables:
+        table_name = table[0]
+        print_subsection(f"Table: {table_name}")
+
+        # Try with schema named param, fallback without (in case schema isn't supported in older versions)
+        try:
+            q = f"""
+                SELECT
+                    data_file,
+                    delete_file
+                FROM ducklake_list_files('{catalog_name}', '{table_name}', schema => '{schema}')
+            """
+            rows = con.execute(q).fetchall()
+        except Exception:
+            try:
+                q = f"""
+                    SELECT
+                        data_file,
+                        delete_file
+                    FROM ducklake_list_files('{catalog_name}', '{table_name}')
+                """
+                rows = con.execute(q).fetchall()
+            except Exception as e:
+                print(f"Error querying metadata files: {e}")
+                continue
+
+        if not rows:
+            print("No files returned by ducklake_list_files (could be empty table or no data files).")
+            continue
+
+        # Collect + check relativity
+        all_paths = []
+        abs_count = 0
+        for data_file, delete_file in rows:
+            if data_file:
+                all_paths.append(str(data_file))
+            if delete_file:
+                all_paths.append(str(delete_file))
+
+        for p in all_paths:
+            if is_absolute_path(p):
+                abs_count += 1
+
+        rel_count = len(all_paths) - abs_count
+
+        print(f"Total file paths returned: {len(all_paths)} | Relative: {rel_count} | Absolute: {abs_count}")
+
+        # Print a sample (avoid flooding output)
+        print(f"{'Path':<80} | {'Type':<10} | {'Relative?'}")
+        print("-" * 110)
+
+        printed = 0
+        for data_file, delete_file in rows:
+            if data_file and printed < max_print_per_table:
+                p = str(data_file)
+                print(f"{p:<80} | {'data':<10} | {'YES' if not is_absolute_path(p) else 'NO'}")
+                printed += 1
+            if delete_file and printed < max_print_per_table:
+                p = str(delete_file)
+                print(f"{p:<80} | {'delete':<10} | {'YES' if not is_absolute_path(p) else 'NO'}")
+                printed += 1
+            if printed >= max_print_per_table:
+                break
+
+        if abs_count > 0:
+            print("\nWARNING: Some paths look ABSOLUTE. Requirement expects RELATIVE paths in metadata.")
+
 # ==============================================================================
 # MAIN
 # ==============================================================================
@@ -293,6 +385,7 @@ if __name__ == "__main__":
         analyze_averages(con)
         analyze_eda(con)
         analyze_yearly_distribution(con)
+        analyze_ducklake_metadata_files(con, tables, schema="main", max_print_per_table=10)
 
         print_header("Analysis Complete")
 
