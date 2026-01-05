@@ -5,6 +5,5 @@ __pycache__/
 
 # Data / run artifacts
 full_ducklake/
-favorita-grocery-sales-forecasting/
 *.parquet
 *.ducklake

@@ -6,7 +6,7 @@ from pathlib import Path
 # ==============================================================================
 # True = Connect to the Full Lake
 # False = Connect to the Sample Lake
-USE_FULL_LAKE = True
+USE_FULL_LAKE = False
 
 # Define paths
 BASE_DIR = Path(".")
@@ -273,6 +273,37 @@ def analyze_yearly_distribution(con):
 
     except Exception as e:
         print(f"Could not analyze distribution: {e}")
+
+
+def show_sample_rows(con, tables):
+    """
+    Shows 10 sample rows from each table in the lake.
+    """
+    print_header("10. Sample Data (First 10 Rows)")
+
+    for table in tables:
+        table_name = table[0]
+        # Skip internal DuckDB/DuckLake system tables to keep output clean
+        if table_name.startswith("ducklake_"): continue
+
+        print_subsection(f"Table: {table_name}")
+        try:
+            # Fetch column names for better readability
+            columns_info = con.execute(f"DESCRIBE {table_name}").fetchall()
+            col_names = [col[0] for col in columns_info]
+            # Print headers separated by pipes
+            print(" | ".join(col_names))
+            print("-" * (len(col_names) * 10))
+
+            # Fetch the first 10 rows
+            rows = con.execute(f"SELECT * FROM {table_name} LIMIT 10").fetchall()
+            for row in rows:
+                # Convert values to string for safe printing
+                print([str(val) for val in row])
+
+        except Exception as e:
+            print(f"Could not fetch sample for {table_name}: {e}")
+
 # ==============================================================================
 # MAIN
 # ==============================================================================
@@ -293,6 +324,8 @@ if __name__ == "__main__":
         analyze_averages(con)
         analyze_eda(con)
         analyze_yearly_distribution(con)
+
+        show_sample_rows(con, tables)
 
         print_header("Analysis Complete")
 
