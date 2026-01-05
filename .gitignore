@@ -7,3 +7,6 @@ __pycache__/
 full_ducklake/
 *.parquet
 *.ducklake
+
+# Project-specific data
+favorita-grocery-sales-forecasting/
