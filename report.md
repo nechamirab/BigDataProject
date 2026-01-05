@@ -170,7 +170,124 @@ We analyzed how the records in the main `train` table are distributed across the
 
 ---
 
-## 10. Conclusion
+## 10. Sample Data Snapshot
+
+To validate data integrity, schema consistency, and correct type parsing during the ingestion process, we queried a sample of **10 rows** from each table in the Data Lake.
+
+### Table: `holidays_events`
+| type | locale | locale_name | description | transferred | date |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Holiday | Local | Manta | Fundacion de Manta | False | 2012-03-02 |
+| Holiday | Regional | Cotopaxi | Provincializacion de Cotopaxi | False | 2012-04-01 |
+| Holiday | Local | Cuenca | Fundacion de Cuenca | False | 2012-04-12 |
+| Holiday | Local | Libertad | Cantonizacion de Libertad | False | 2012-04-14 |
+| Holiday | Local | Riobamba | Cantonizacion de Riobamba | False | 2012-04-21 |
+| Holiday | Local | Puyo | Cantonizacion del Puyo | False | 2012-05-12 |
+| Holiday | Local | Guaranda | Cantonizacion de Guaranda | False | 2012-06-23 |
+| Holiday | Regional | Imbabura | Provincializacion de Imbabura | False | 2012-06-25 |
+| Holiday | Local | Latacunga | Cantonizacion de Latacunga | False | 2012-06-25 |
+| Holiday | Local | Machala | Fundacion de Machala | False | 2012-06-25 |
+
+### Table: `items`
+| item_nbr | family | class | perishable |
+| :--- | :--- | :--- | :--- |
+| 96995 | GROCERY I | 1093 | 0 |
+| 99197 | GROCERY I | 1067 | 0 |
+| 103501 | CLEANING | 3008 | 0 |
+| 103520 | GROCERY I | 1028 | 0 |
+| 103665 | BREAD/BAKERY | 2712 | 1 |
+| 105574 | GROCERY I | 1045 | 0 |
+| 105575 | GROCERY I | 1045 | 0 |
+| 105576 | GROCERY I | 1045 | 0 |
+| 105577 | GROCERY I | 1045 | 0 |
+| 105693 | GROCERY I | 1034 | 0 |
+
+### Table: `oil`
+| dcoilwtico | date |
+| :--- | :--- |
+| None | 2013-01-01 |
+| 93.14 | 2013-01-02 |
+| 92.97 | 2013-01-03 |
+| 93.12 | 2013-01-04 |
+| 93.2 | 2013-01-07 |
+| 93.21 | 2013-01-08 |
+| 93.08 | 2013-01-09 |
+| 93.81 | 2013-01-10 |
+| 93.6 | 2013-01-11 |
+| 94.27 | 2013-01-14 |
+
+### Table: `stores`
+| store_nbr | city | state | type | cluster |
+| :--- | :--- | :--- | :--- | :--- |
+| 1 | Quito | Pichincha | D | 13 |
+| 2 | Quito | Pichincha | D | 13 |
+| 3 | Quito | Pichincha | D | 8 |
+| 4 | Quito | Pichincha | D | 9 |
+| 5 | Santo Domingo | Santo Domingo de los Tsachilas | D | 4 |
+| 6 | Quito | Pichincha | D | 13 |
+| 7 | Quito | Pichincha | D | 8 |
+| 8 | Quito | Pichincha | D | 8 |
+| 9 | Quito | Pichincha | B | 6 |
+| 10 | Quito | Pichincha | C | 15 |
+
+### Table: `transactions`
+| store_nbr | transactions | date |
+| :--- | :--- | :--- |
+| 25 | 770 | 2013-01-01 |
+| 1 | 2111 | 2013-01-02 |
+| 2 | 2358 | 2013-01-02 |
+| 3 | 3487 | 2013-01-02 |
+| 4 | 1922 | 2013-01-02 |
+| 5 | 1903 | 2013-01-02 |
+| 6 | 2143 | 2013-01-02 |
+| 7 | 1874 | 2013-01-02 |
+| 8 | 3250 | 2013-01-02 |
+| 9 | 2940 | 2013-01-02 |
+
+### Table: `train` (Main Fact Table)
+| id | date | store_nbr | item_nbr | unit_sales | onpromotion |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 0 | 2013-01-01 | 25 | 103665 | 7.0 | None |
+| 1 | 2013-01-01 | 25 | 105574 | 1.0 | None |
+| 2 | 2013-01-01 | 25 | 105575 | 2.0 | None |
+| 3 | 2013-01-01 | 25 | 108079 | 1.0 | None |
+| 4 | 2013-01-01 | 25 | 108701 | 1.0 | None |
+| 5 | 2013-01-01 | 25 | 108786 | 3.0 | None |
+| 6 | 2013-01-01 | 25 | 108797 | 1.0 | None |
+| 7 | 2013-01-01 | 25 | 108952 | 1.0 | None |
+| 8 | 2013-01-01 | 25 | 111397 | 13.0 | None |
+| 9 | 2013-01-01 | 25 | 114790 | 3.0 | None |
+
+---
+
+## 11. Metadata & Relative Path Verification
+
+A critical requirement for Data Lake portability is ensuring that file paths stored in the metadata are **Relative** rather than Absolute. We queried the internal DuckLake function `ducklake_list_files` to verify this.
+
+**Verification Results:**
+The analysis confirms that **100%** of the paths in the metadata are correctly stored as relative paths.
+
+| Table Analyzed | Total Files | Relative Paths | Absolute Paths | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **holidays_events** | 69 | 69 | 0 | ✅ PASS |
+| **items** | 1 | 1 | 0 | ✅ PASS |
+| **oil** | 56 | 56 | 0 | ✅ PASS |
+| **stores** | 1 | 1 | 0 | ✅ PASS |
+| **train** | 56 | 56 | 0 | ✅ PASS |
+| **transactions** | 56 | 56 | 0 | ✅ PASS |
+
+**Sample Metadata Output (Proof of Relativity):**
+The following is a snippet from the metadata query showing the file structure.
+
+| Path (Snippet) | Type | Relative? |
+| :--- | :--- | :--- |
+| `full_ducklake\my_ducklake.ducklake.files\\main\holidays_events\year=2012\month=3\...parquet` | data | **YES** |
+| `full_ducklake\my_ducklake.ducklake.files\\main\items\ducklake-019b8ecc-3d02...parquet` | data | **YES** |
+| `full_ducklake\my_ducklake.ducklake.files\\main\train\year=2013\month=1\ducklake...parquet` | data | **YES** |
+
+---
+
+## 12. Conclusion
 
 This Data Lake provides a structured, scalable, and rich representation of retail sales data.
 By utilizing **DuckDB** and **Parquet**, we successfully analyzed over **125 Million rows** efficiently. The analysis confirms

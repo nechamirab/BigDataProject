@@ -6,7 +6,7 @@ from pathlib import Path
 # ==============================================================================
 # True = Connect to the Full Lake
 # False = Connect to the Sample Lake
-USE_FULL_LAKE = False
+USE_FULL_LAKE = True
 
 # Define paths
 BASE_DIR = Path(".")

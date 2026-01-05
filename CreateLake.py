@@ -7,7 +7,7 @@ import shutil
 # ==============================================================================
 
 # Set to True for Submission (Sample < 50MB), False for Full Local Work (~5GB)
-CREATE_SAMPLE_FOR_SUBMISSION = True
+CREATE_SAMPLE_FOR_SUBMISSION = False
 
 # Paths configuration
 BASE_DIR = Path(".")
