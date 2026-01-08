@@ -1,6 +1,5 @@
 import duckdb
 import sqlite3
-import pandas as pd
 from pathlib import Path
 
 # ==============================================================================
@@ -12,8 +11,10 @@ DUCKLAKE_PATH = BASE_DIR / "full_ducklake" / "my_ducklake.ducklake"
 SQLITE_DB_PATH = BASE_DIR / "dashboard_gold.db"  # This is the new "Small/Gold" DB
 
 
-def get_duckdb_con():
-    """Connects to the Big Data Lake (DuckDB)"""
+def init_duckdb_with_sqlite():
+    """
+    Initializes the DuckDB connection and attaches the SQLite database directly.
+    """
     if not DUCKLAKE_PATH.exists():
         raise FileNotFoundError(f"DuckLake not found at: {DUCKLAKE_PATH}")
 
@@ -21,21 +22,146 @@ def get_duckdb_con():
     con.execute("INSTALL ducklake; LOAD ducklake;")
     con.execute(f"ATTACH 'ducklake:{DUCKLAKE_PATH.as_posix()}' AS my_ducklake;")
     con.execute("USE my_ducklake;")
+
+    # Load the SQLite Extension and Attach the Target DB
+    # This enables direct SQL writes from DuckDB to SQLite
+    con.execute("INSTALL sqlite; LOAD sqlite;")
+    con.execute(f"ATTACH '{SQLITE_DB_PATH.as_posix()}' AS gold (TYPE SQLITE);")
     return con
 
-
-def get_sqlite_con():
-    """Connects to the Small Gold Database (SQLite)"""
-    # SQLite will create the file if it doesn't exist
-    return sqlite3.connect(SQLITE_DB_PATH)
-
-
 # ==============================================================================
-# QUESTION 1: Basket Size Analysis
+# QUESTION 1: Pareto Analysis (The 80/20 Rule)
 # ==============================================================================
-def process_question_1(duck_con, sqlite_con):
+def process_question_1(con):
     """
-    Q1: Analyze 'Basket Size' efficiency per city.
+        Q1: Analyze Inventory Efficiency using the Pareto Principle.
+
+        Business Question: Do 20% of our items generate 80% of our revenue?
+        Logic: Calculates a running total of sales to identify the revenue cutoff point.
+        """
+    print("\nProcessing Question 1: Pareto Analysis (Inventory Efficiency)...")
+
+    query = """
+    CREATE OR REPLACE TABLE gold.q1_pareto_analysis AS
+    WITH item_sales AS (
+        -- Step 1: Calculate total sales for each individual product (SKU)
+        SELECT 
+            i.item_nbr,
+            i.family, 
+            SUM(t.unit_sales) as total_sales
+        FROM train t 
+        JOIN items i ON t.item_nbr = i.item_nbr
+        GROUP BY 1, 2
+    ),
+    calc_running_total AS (
+        -- Step 2: Calculate Running Total using Window Functions
+        SELECT 
+            item_nbr,
+            family,
+            total_sales,
+            -- Window function: Sums sales from the best-selling item down to the current row
+            SUM(total_sales) OVER (ORDER BY total_sales DESC) as running_total,
+
+            -- Grand total of all sales (required to calculate the percentage share)
+            SUM(total_sales) OVER () as grand_total
+        FROM item_sales
+    )
+    -- Step 3: Final Classification into Pareto Categories
+    SELECT 
+        item_nbr,
+        family,
+        total_sales,
+
+        -- Calculate cumulative percentage of revenue accumulated so far
+        ROUND((running_total / grand_total) * 100, 2) as cumulative_pct,
+
+        -- Business Logic: Tag item as 'Core Revenue' (Top 80%) or 'Dead Stock' (Bottom 20%)
+        CASE 
+            WHEN (running_total / grand_total) <= 0.80 THEN 'Top 80% (Core Revenue)'
+            ELSE 'Bottom 20% (Dead Stock / Long Tail)'
+        END as pareto_group
+
+    FROM calc_running_total
+    ORDER BY total_sales DESC;
+    """
+
+    con.execute(query)
+    print("   >> Table 'gold.q1_pareto_analysis' created successfully.")
+
+    # Sanity Check & Insight (Fetch just for display)
+    # Preview Top 10
+    preview_df = con.execute("SELECT * FROM gold.q1_pareto_analysis LIMIT 10").fetchdf()
+    print("   " + "-" * 60)
+    print(preview_df.to_string(index=False))
+    print("   " + "-" * 60)
+
+    # Calculate Insight Numbers via SQL (Very efficient)
+    stats = con.execute("""
+            SELECT 
+                COUNT(*) as total_items,
+                COUNT(CASE WHEN pareto_group LIKE 'Top%' THEN 1 END) as core_items
+            FROM gold.q1_pareto_analysis
+        """).fetchone()
+
+    total_items = stats[0]
+    core_items = stats[1]
+    core_pct = (core_items / total_items) * 100
+
+    print(f"   >> INSIGHT: Only {core_pct:.2f}% of items generate 80% of the revenue.")
+    if core_pct < 20:
+        print("   (Extreme concentration - highly dependent on very few items)")
+    elif core_pct > 40:
+        print("   (Flatter distribution than typical Pareto)")
+
+# ==============================================================================
+# QUESTION 2: Regional Preferences (Top-3 Products per City)
+# ==============================================================================
+def process_question_2(con):
+    """
+        Q2: Identify top selling product families per city (Localization).
+
+        Business Question: How do consumer preferences vary between cities?
+        Logic: Rank product families by sales within each city partition.
+
+        Technical Note:
+        We use DuckDB's 'QUALIFY' clause to filter the Top-3 results immediately
+        after the window function, without needing a subquery.
+        We return the data in 'Long Format' (3 rows per city).
+        """
+    print("\nProcessing Question 2: Regional Preferences (Top 3)...")
+
+    query = """
+    CREATE OR REPLACE TABLE gold.q2_top_products_city AS
+    SELECT 
+        s.city,
+        i.family,
+        -- Total sales for this specific city-family combination
+        ROUND(SUM(t.unit_sales), 2) as total_sold,
+        -- Window Function: Rank families within each city (1 = Best Seller)
+        RANK() OVER (PARTITION BY s.city ORDER BY SUM(t.unit_sales) DESC) as rank_in_city
+    FROM train t
+    JOIN stores s ON t.store_nbr = s.store_nbr
+    JOIN items i ON t.item_nbr = i.item_nbr
+    GROUP BY s.city, i.family
+    -- DuckDB Exclusive: Filter window results directly (No subquery needed!)
+    QUALIFY rank_in_city <= 3
+    ORDER BY s.city, rank_in_city;
+    """
+
+    con.execute(query)
+    print("   >> Table 'gold.q2_top_products_city' created successfully.")
+
+    # Print Sample
+    print("   >> Top 3 Preferences (Sample):")
+    df_sample = con.execute("SELECT * FROM gold.q2_top_products_city LIMIT 6").fetchdf()
+    print(df_sample.to_string(index=False))
+
+# ==============================================================================
+# QUESTION 3: Basket Size Analysis
+# ==============================================================================
+def process_question_3(con):
+    """
+    Q3: Analyze 'Basket Size' efficiency per city.
 
     Business Question: Which cities have the largest average transaction size?
     Logic: (Total Items Sold) / (Total Transactions).
@@ -45,9 +171,10 @@ def process_question_1(duck_con, sqlite_con):
     BEFORE joining with transactions. This prevents 'Fan-out' (duplication)
     of the transaction counts, which would lead to incorrect averages.
     """
-    print("\nProcessing Question 1: Basket Size Analysis by City...")
+    print("\nProcessing Question 3: Basket Size Analysis by City...")
 
     query = """
+    CREATE OR REPLACE TABLE gold.q3_basket_size_analysis AS
     WITH daily_sales_agg AS (
         -- Step 1: Pre-aggregate items sold per store per day.
         -- This collapses the 'train' table (millions of rows) into one row per store/date.
@@ -87,41 +214,27 @@ def process_question_1(duck_con, sqlite_con):
     ORDER BY city_rank;
     """
 
-    # 1. Execute query in DuckDB (High Performance Engine)
-    df = duck_con.execute(query).fetchdf()
+    con.execute(query)
+    print("   >> Table 'gold.q3_basket_size_analysis' created successfully.")
 
-    # 2. Sanity Check: Ensure results are logical
-    if not df.empty:
-        print("\n   >> Top 5 Cities by Basket Size:")
-        print("   " + "-" * 60)
-        # Prints the first 5 lines
-        print(df.head(5).to_string(index=False))
-        print("   " + "-" * 60)
-
-        top_val = df.iloc[0]['avg_basket_size']
-        if top_val < 1:
-            print("   WARNING: Basket size is suspiciously low (<1). Check Logic!")
-        else:
-            print(f"   >> Data looks logical (Top size: {top_val}).")
-
-    # 3. Save the result to SQLite (Gold Layer for Dashboard)
-    table_name = "q1_basket_size_analysis"
-    df.to_sql(table_name, sqlite_con, if_exists="replace", index=False)
-    print(f"   >> Saved result to SQLite table: '{table_name}'")
-
+    # Print Sample
+    print("   >> Top 5 Cities by Basket Size:")
+    df_sample = con.execute("SELECT * FROM gold.q3_basket_size_analysis LIMIT 5").fetchdf()
+    print(df_sample.to_string(index=False))
 
 # ==============================================================================
-# QUESTION 2: Local vs. National Holidays Impact
+# QUESTION 4: Local vs. National Holidays Impact
 # ==============================================================================
-def process_question_2(duck_con, sqlite_con):
+def process_question_4(con):
     """
-    Q2: Analyze the impact of 'Local' vs 'National' holidays.
+    Q4: Analyze the impact of 'Local' vs 'National' holidays.
     UPDATED: Now includes a 'winner_type' column to explicitly show
     which holiday type generates more sales.
     """
-    print("\nProcessing Question 2: Local vs. National Holidays...")
+    print("\nProcessing Question 4: Local vs. National Holidays...")
 
     query = """
+    CREATE OR REPLACE TABLE gold.q4_holiday_impact AS
     WITH city_daily_sales AS (
         -- Step 1: Sales per City per Date
         SELECT 
@@ -175,28 +288,20 @@ def process_question_2(duck_con, sqlite_con):
     ORDER BY local_holiday_rank;
     """
 
-    # 1. Execute in DuckDB
-    df = duck_con.execute(query).fetchdf()
+    con.execute(query)
+    print("   >> Table 'gold.q4_holiday_impact' created successfully.")
 
-    # 2. Print Sample
-    if not df.empty:
-        print("\n   >> Top 5 Cities - Holiday Impact Comparison:")
-        print("   " + "-" * 90)
-        print(df.head(5).to_string(index=False))
-        print("   " + "-" * 90)
-
-    # 3. Save to SQLite
-    table_name = "q2_holiday_impact"
-    df.to_sql(table_name, sqlite_con, if_exists="replace", index=False)
-    print(f"\n   >> Saved result to SQLite table: '{table_name}'")
+    print("   >> Holiday Impact Sample:")
+    df_sample = con.execute("SELECT * FROM gold.q4_holiday_impact LIMIT 5").fetchdf()
+    print(df_sample.to_string(index=False))
 
 
 # ==============================================================================
-# QUESTION 3: Perishable Goods Growth (Year-Over-Year)
+# QUESTION 6: Perishable Goods Growth (Year-Over-Year)
 # ==============================================================================
-def process_question_3(duck_con, sqlite_con):
+def process_question_6(con):
     """
-    Q3: Identify top stores for Perishable Goods and calculate Year-Over-Year (YoY) growth.
+    Q6: Identify top stores for Perishable Goods and calculate Year-Over-Year (YoY) growth.
 
     Business Question: Which stores handle the most perishable inventory,
     and are they growing or shrinking? (Critical for cold-chain logistics).
@@ -207,9 +312,10 @@ def process_question_3(duck_con, sqlite_con):
     3. Use WINDOW FUNCTION (LAG) to fetch the previous year's sales.
     4. Calculate Growth %: ((Current - Previous) / Previous) * 100.
     """
-    print("\nProcessing Question 3: Perishable Goods Growth Analysis...")
+    print("\nProcessing Question 6: Perishable Goods Growth Analysis...")
 
     query = """
+    CREATE OR REPLACE TABLE gold.q6_perishable_growth AS
     WITH annual_perishable_sales AS (
         -- Step 1: Filter & Aggregate
         -- Get total perishable sales for each store per year
@@ -260,42 +366,135 @@ def process_question_3(duck_con, sqlite_con):
     LIMIT 10; -- Top 10 stores
     """
 
-    # 1. Execute in DuckDB
+    con.execute(query)
+    print("   >> Table 'gold.q6_perishable_growth' created successfully.")
+
+    print("   >> Top 10 Growth Stores:")
+    df_sample = con.execute("SELECT * FROM gold.q6_perishable_growth LIMIT 10").fetchdf()
+    print(df_sample.to_string(index=False))
+
+'''
+def explore_data_trends(duck_con):
+    print("\n--- Exploratory Data Analysis: Sales Heatmap ---")
+
+    # שאילתת PIVOT ידנית
+    # אנחנו מסכמים את המכירות לכל חודש ושמים אותם בעמודות נפרדות
+    query = """
+    SELECT 
+        EXTRACT(YEAR FROM date) as Year,
+        -- חישוב סכום לכל חודש בנפרד
+        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 1 THEN unit_sales END) / 1000000, 2) as Jan_M,
+        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 2 THEN unit_sales END) / 1000000, 2) as Feb_M,
+        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 3 THEN unit_sales END) / 1000000, 2) as Mar_M,
+        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 4 THEN unit_sales END) / 1000000, 2) as Apr_M,
+        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 5 THEN unit_sales END) / 1000000, 2) as May_M,
+        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 6 THEN unit_sales END) / 1000000, 2) as Jun_M,
+        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 7 THEN unit_sales END) / 1000000, 2) as Jul_M,
+        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 8 THEN unit_sales END) / 1000000, 2) as Aug_M,
+        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 9 THEN unit_sales END) / 1000000, 2) as Sep_M,
+        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 10 THEN unit_sales END) / 1000000, 2) as Oct_M,
+        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 11 THEN unit_sales END) / 1000000, 2) as Nov_M,
+        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 12 THEN unit_sales END) / 1000000, 2) as Dec_M,
+
+        ROUND(SUM(unit_sales) / 1000000, 2) as Total_Year_M
+    FROM train
+    GROUP BY Year
+    ORDER BY Year;
+    """
+
     df = duck_con.execute(query).fetchdf()
 
-    # 2. Print Sample
-    if not df.empty:
-        print("\n   >> Top 10 Stores - Perishable Sales & Growth (2016):")
-        print("   " + "-" * 90)
-        print(df.to_string(index=False))
-        print("   " + "-" * 90)
+    print("\nSales in Millions (M) per Month/Year:")
+    print("-" * 140)
+    print(df.to_string(index=False))
+    print("-" * 140)
 
-    # 3. Save to SQLite
-    table_name = "q3_perishable_growth"
-    df.to_sql(table_name, sqlite_con, if_exists="replace", index=False)
-    print(f"\n   >> Saved result to SQLite table: '{table_name}'")
+
+def explore_oil_pivot(duck_con):
+    print("\n--- Exploratory Data Analysis: Oil Price Heatmap (Ordered) ---")
+
+    query = """
+    WITH oil_prep AS (
+        SELECT 
+            EXTRACT(YEAR FROM date) as Year,
+            EXTRACT(MONTH FROM date) as Month,
+            dcoilwtico
+        FROM oil
+    )
+    PIVOT oil_prep
+    ON Month IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12) -- כאן הכפייה של הסדר!
+    USING ROUND(AVG(dcoilwtico), 1)
+    GROUP BY Year
+    ORDER BY Year;
+    """
+
+    df = duck_con.execute(query).fetchdf()
+
+    print("\nOil Prices (Monthly Average) - Correctly Ordered:")
+    print("-" * 100)
+    print(df.to_string(index=False))
+    print("-" * 100)
+'''
+# =============================================
+
+def save_raw_samples(con):
+    print("\n--- Saving Raw Samples to SQLite ---")
+
+    tables_to_sample = ['train', 'items', 'stores', 'transactions', 'oil', 'holidays_events']
+
+    for tbl in tables_to_sample:
+        con.execute(f"""
+                    CREATE OR REPLACE TABLE gold.sample_{tbl} AS 
+                    SELECT * FROM {tbl} USING SAMPLE 150
+                """)
+        print(f"   >> Created 'gold.sample_{tbl}' successfully.")
+
+
+def vacuum_sqlite_database():
+    """
+    Final Cleanup: Runs the VACUUM command on the SQLite database.
+    This rebuilds the database file, removing any 'dead' space from deleted rows
+    and ensuring the file size is as small as possible for submission.
+    """
+    print("\n--- Final Step: Optimizing SQLite File Size (VACUUM) ---")
+
+    # אנחנו מתחברים ישירות לקובץ ה-SQLite לרגע אחד כדי לנקות אותו
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+
+        # הרצת פקודת הניקיון
+        conn.execute("VACUUM;")
+
+        conn.close()
+        print("   >> VACUUM completed successfully. File is clean and compact.")
+    except Exception as e:
+        print(f"   >> Warning: Could not run VACUUM: {e}")
 
 # ==============================================================================
 # MAIN EXECUTION BLOCK
 # ==============================================================================
 if __name__ == "__main__":
-    # Initialize connections
-    duck_con = get_duckdb_con()
-    sqlite_con = get_sqlite_con()
-
+    con = None
     try:
-        # Run Analysis for Question 1
-        process_question_1(duck_con, sqlite_con)
-        # Run Analysis for Question 2
-        process_question_2(duck_con, sqlite_con)
-        # Run Analysis for Question 3
-        process_question_3(duck_con, sqlite_con)
+        # Initialize Connection (Attach both DBs)
+        con = init_duckdb_with_sqlite()
+
+        process_question_1(con)
+        process_question_2(con)
+        process_question_3(con)
+        process_question_4(con)
+        process_question_6(con)
+        #explore_data_trends(duck_con)
+        #explore_oil_pivot(duck_con)
+        save_raw_samples(con)
 
     except Exception as e:
         print(f"Error during execution: {e}")
 
     finally:
         # Always close connections
-        duck_con.close()
-        sqlite_con.close()
+        if con:
+            con.close()
+
+        vacuum_sqlite_database()
         print("\nDone.")
