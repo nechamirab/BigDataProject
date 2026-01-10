@@ -295,6 +295,34 @@ def process_question_4(con):
     df_sample = con.execute("SELECT * FROM gold.q4_holiday_impact LIMIT 5").fetchdf()
     print(df_sample.to_string(index=False))
 
+def process_question_5_pivot(con):
+    """
+    Q5: Seasonality (PIVOT) - monthly total sales per year.
+    Business Question: Is there seasonality? Which months are strongest each year?
+    Requirement: Uses DuckDB PIVOT and saves the output into SQLite (gold).
+    """
+    print("\nProcessing Question 5: Seasonality Pivot (Monthly Sales by Year)...")
+
+    query = """
+    CREATE OR REPLACE TABLE gold.q5_sales_monthly_pivot AS
+    WITH sales_prep AS (
+        SELECT
+            EXTRACT(YEAR FROM date) AS year,
+            EXTRACT(MONTH FROM date) AS month,
+            unit_sales
+        FROM train
+    )
+    PIVOT sales_prep
+    ON month IN (1,2,3,4,5,6,7,8,9,10,11,12)
+    USING ROUND(SUM(unit_sales), 2)
+    GROUP BY year
+    ORDER BY year;
+    """
+    con.execute(query)
+    print("   >> Table 'gold.q5_sales_monthly_pivot' created successfully.")
+
+    df_sample = con.execute("SELECT * FROM gold.q5_sales_monthly_pivot LIMIT 5").fetchdf()
+    print(df_sample.to_string(index=False))
 
 # ==============================================================================
 # QUESTION 6: Perishable Goods Growth (Year-Over-Year)
@@ -470,6 +498,134 @@ def vacuum_sqlite_database():
     except Exception as e:
         print(f"   >> Warning: Could not run VACUUM: {e}")
 
+def verify_sqlite_tables_direct():
+    print("\n--- Direct SQLite Verification ---")
+    import sqlite3
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    rows = conn.execute("""
+        SELECT name FROM sqlite_master
+        WHERE type='table'
+        ORDER BY name
+    """).fetchall()
+    conn.close()
+
+    if not rows:
+        print("SQLite file contains NO tables.")
+    else:
+        print("SQLite tables:")
+        for (name,) in rows:
+            print(" -", name)
+
+def print_gold_catalog(con, preview_rows: int = 5):
+    """
+    Prints all user-created GOLD tables in the attached SQLite DB, with:
+    - row count
+    - column count
+    - preview rows
+
+    Notes:
+    - In your environment, DuckDB suggests "main.sqlite_master" (not gold.main.sqlite_master).
+    - We skip system/metadata tables (sqlite_*, ducklake_*, __*).
+    """
+    print("\n" + "=" * 70)
+    print("--- GOLD (SQLite) CATALOG ---")
+    print("=" * 70)
+
+    # 1) Show attached DBs (sanity check)
+    try:
+        attached = con.execute("PRAGMA database_list;").fetchdf()
+        print("\nAttached DBs (DuckDB view):")
+        print(attached.to_string(index=False))
+    except Exception as e:
+        print(f"Could not read PRAGMA database_list: {e}")
+
+    # 2) List tables from SQLite's sqlite_master (reliable)
+    try:
+        tables = con.execute("""
+            SELECT name
+            FROM main.sqlite_master
+            WHERE type='table'
+            ORDER BY name
+        """).fetchall()
+    except Exception as e:
+        print(f"\nERROR: Could not query main.sqlite_master: {e}")
+        return
+
+    if not tables:
+        print("\nNo tables found in SQLite (main.sqlite_master).")
+        return
+
+    # 3) Iterate and print metadata + preview
+    for (tname,) in tables:
+        # Keep only our project tables inside SQLite
+        if not (tname.startswith("q") or tname.startswith("sample_") or tname in ("gold_inventory", "feedback")):
+            continue
+
+        try:
+            # Row count
+            row_cnt = con.execute(f"SELECT COUNT(*) FROM gold.{tname}").fetchone()[0]
+
+            # Column count
+            col_cnt = con.execute(
+                f"SELECT COUNT(*) FROM pragma_table_info('gold.{tname}')"
+            ).fetchone()[0]
+
+            print(f"\nTable: gold.{tname} | rows={row_cnt:,} | cols={col_cnt}")
+
+            # Preview
+            df = con.execute(f"SELECT * FROM gold.{tname} LIMIT {preview_rows}").fetchdf()
+            print(df.to_string(index=False))
+
+        except Exception as e:
+            print(f"\nTable: gold.{tname} (skipped) | reason: {e}")
+
+def create_gold_inventory(con):
+    """
+    Creates a GOLD inventory table in SQLite:
+    table_name | row_count | col_count
+    """
+    print("\n--- Creating GOLD inventory table ---")
+
+    # Create empty table
+    con.execute("""
+        CREATE OR REPLACE TABLE gold.gold_inventory AS
+        SELECT 
+            ''::VARCHAR AS table_name,
+            0::BIGINT AS row_count,
+            0::BIGINT AS col_count
+        WHERE FALSE;
+    """)
+
+    # Read SQLite catalog
+    tables = con.execute("""
+        SELECT name
+        FROM main.sqlite_master
+        WHERE type='table'
+        ORDER BY name
+    """).fetchall()
+
+    for (tname,) in tables:
+        # Only our project tables
+        if not (tname.startswith("q") or tname.startswith("sample_")):
+            continue
+
+        row_cnt = con.execute(f"SELECT COUNT(*) FROM gold.{tname}").fetchone()[0]
+        col_cnt = con.execute(
+            f"SELECT COUNT(*) FROM pragma_table_info('gold.{tname}')"
+        ).fetchone()[0]
+
+        con.execute(
+            "INSERT INTO gold.gold_inventory VALUES (?, ?, ?);",
+            [tname, row_cnt, col_cnt]
+        )
+
+    df = con.execute("""
+        SELECT * FROM gold.gold_inventory
+        ORDER BY table_name
+    """).fetchdf()
+
+    print(df.to_string(index=False))
+
 # ==============================================================================
 # MAIN EXECUTION BLOCK
 # ==============================================================================
@@ -483,10 +639,15 @@ if __name__ == "__main__":
         process_question_2(con)
         process_question_3(con)
         process_question_4(con)
+        process_question_5_pivot(con)
         process_question_6(con)
         #explore_data_trends(duck_con)
         #explore_oil_pivot(duck_con)
         save_raw_samples(con)
+        create_gold_inventory(con)
+
+        verify_sqlite_tables_direct()
+        print_gold_catalog(con, preview_rows=5)
 
     except Exception as e:
         print(f"Error during execution: {e}")
