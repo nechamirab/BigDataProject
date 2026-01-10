@@ -308,12 +308,18 @@ def page_q1_pareto():
     st.subheader("גרף: Pareto Curve (Top 500)")
     plot_df = filtered.head(500).copy()
     plot_df["rank"] = range(1, len(plot_df) + 1)
+
     safe_line_chart(
         x=plot_df["rank"],
         y=plot_df["cumulative_pct"],
         title="Pareto Curve",
         xlabel="Item Rank (by Total Sales)",
         ylabel="Cumulative % of Sales"
+    )
+    st.markdown(
+        "**תיאור הגרף:** ציר ה־X מציג את דירוג המוצרים לפי מכירות (מהמוכר ביותר והלאה), "
+        "וציר ה־Y מציג את **אחוז המכירות המצטבר**. "
+        "אם העקומה עולה מהר בתחילת הדרך — זה סימן שמעט מוצרים מייצרים חלק גדול מהמכירות."
     )
 
 
@@ -351,6 +357,11 @@ def page_q2_city_preferences():
             ylabel="Total Sold",
             rotate_xticks=True
         )
+        st.markdown(
+            "**תיאור הגרף:** גרף עמודות שמציג את **3 משפחות המוצרים המובילות בעיר שנבחרה**, "
+            "כאשר גובה כל עמודה מייצג את **סך היחידות שנמכרו** עבור אותה משפחה. "
+            "כך אפשר להבין במה העיר מתמחה מבחינת ביקוש."
+        )
 
 
 def page_q3_basket_size():
@@ -384,6 +395,11 @@ def page_q3_basket_size():
         xlabel="City",
         ylabel="Avg Basket Size",
         rotate_xticks=True
+    )
+    st.markdown(
+        "**תיאור הגרף:** גרף עמודות שמציג לכל עיר (ב־Top-N) את **גודל הסל הממוצע** "
+        "(מספר פריטים ממוצע לעסקה). "
+        "עמודה גבוהה יותר אומרת שבממוצע לקוחות בעיר קונים יותר פריטים בכל קנייה."
     )
 
 
@@ -423,6 +439,12 @@ def page_q4_holidays():
         title="Local vs National Holiday Impact",
         xlabel="National Holiday Avg Sales",
         ylabel="Local Holiday Avg Sales"
+    )
+    st.markdown(
+        "**תיאור הגרף:** כל נקודה מייצגת עיר. ציר ה־X הוא **ממוצע מכירות בחגים לאומיים**, "
+        "וציר ה־Y הוא **ממוצע מכירות בחגים מקומיים**. "
+        "נקודות שמופיעות *מעל האלכסון הדמיוני* (Y>X) מעידות שחגים מקומיים חזקים יותר בעיר הזו, "
+        "ומתחתיו — חגים לאומיים חזקים יותר."
     )
 
 
@@ -464,6 +486,10 @@ def page_q5_seasonality():
         xlabel="Month",
         ylabel="Average Sales"
     )
+    st.markdown(
+        "**תיאור הגרף:** קו שמציג את **ממוצע המכירות לכל חודש** (1–12) על פני השנים שנבחרו. "
+        "שיאים/שקעים לאורך החודשים מצביעים על עונתיות — חודשים שבהם יש בדרך כלל יותר או פחות מכירות."
+    )
 
 
 def page_q6_perishables():
@@ -502,6 +528,11 @@ def page_q6_perishables():
         title="Top 10 Growth Percentage (YoY)",
         xlabel="City",
         ylabel="Growth %"
+    )
+    st.markdown(
+        "**תיאור הגרף:** גרף עמודות שמציג את **10 הערכים הגבוהים ביותר של אחוז הצמיחה (YoY)** "
+        "לפי הפילטר הנוכחי. עמודה גבוהה יותר = צמיחה גבוהה יותר לעומת השנה הקודמת. "
+        "זה מאפשר לזהות מוקדים שבהם המכירות של מתכלים גדלות מהר."
     )
 
 
