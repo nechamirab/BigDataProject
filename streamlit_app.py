@@ -127,7 +127,7 @@ def rename_columns_for_display(df: pd.DataFrame, mapping: dict) -> pd.DataFrame:
 def safe_bar_chart(x, y, title, xlabel, ylabel, rotate_xticks=False):
     """Plot with English-only labels to avoid RTL issues."""
     fig = plt.figure(figsize=(10, 5))
-    plt.bar(x, y, color='skyblue')
+    plt.bar(x, y, color='pink')
     plt.title(title, fontsize=14)
     plt.xlabel(xlabel, fontsize=12)
     plt.ylabel(ylabel, fontsize=12)
@@ -140,7 +140,7 @@ def safe_bar_chart(x, y, title, xlabel, ylabel, rotate_xticks=False):
 def safe_line_chart(x, y, title, xlabel, ylabel):
     """Plot with English-only labels to avoid RTL issues."""
     fig = plt.figure(figsize=(10, 5))
-    plt.plot(x, y, marker='o', linestyle='-')
+    plt.plot(x, y, marker='o', linestyle='-', color='purple')
     plt.title(title, fontsize=14)
     plt.xlabel(xlabel, fontsize=12)
     plt.ylabel(ylabel, fontsize=12)
@@ -258,7 +258,7 @@ MAP_Q6 = {
 # PAGES
 # ==============================
 def page_overview():
-    st.title("Overview")
+    st.title("Overview 👀")
     explain_box(
         "About the Dashboard",
         "This dashboard presents business insights derived from large-scale retail data. The data has been processed (ETL) and stored in a GOLD layer (SQLite) for optimal performance.\n\n"
@@ -292,7 +292,7 @@ def page_raw_data():
     """
     NEW PAGE: Displays raw data samples (required by assignment).
     """
-    st.title("Raw data (samples)")
+    st.title("Raw data (samples) 📚")
     explain_box("Data Exploration",
         "This page allows you to inspect the structure of the original data tables before any aggregation.\n\n"
              "**What's on this page:** A dropdown menu to select a table (e.g., Train, Items, Stores) and a view of 150 sample rows from that table."
@@ -318,7 +318,7 @@ def page_raw_data():
 
 
 def page_q1_pareto():
-    st.title("Q1: Pareto Analysis (80/20)")
+    st.title("Q1: Pareto Analysis (80/20) 💰")
     explain_box(
         "Inventory Efficiency",
         "This analysis checks if the '80/20 rule' applies here: Does a small number of products generate the majority (80%) of the revenue?\n\n"
@@ -331,7 +331,7 @@ def page_q1_pareto():
         return
 
     families = ["(All)"] + sorted(df["family"].dropna().unique().tolist())
-    selected_family = st.selectbox("ilter by Category", families)
+    selected_family = st.selectbox("Filter by Category", families)
 
     filtered = df.copy()
     if selected_family != "(All)":
@@ -343,7 +343,7 @@ def page_q1_pareto():
     core_pct = (core_items / total_items) * 100 if total_items else 0
     st.write(f"Out of **{total_items:,}** products, approximately **{core_pct:.2f}%** are in the 'Top 80% (Core Revenue)' group.")
 
-    st.subheader("Top Products Table (Top 50")
+    st.subheader("Top Products Table (Top 50)")
     disp = rename_columns_for_display(filtered, MAP_Q1)
     styled_dataframe(disp.head(50))
 
@@ -366,7 +366,7 @@ def page_q1_pareto():
     )
 
 def page_q2_city_preferences():
-    st.title("Q2: Regional Preferences (Top-3)")
+    st.title("Q2: Regional Preferences (Top-3) ⛰️")
     explain_box(
         "Localization Analysis",
         "What are the top 3 selling product categories in each city? This helps understand local consumer behavior.\n\n"
@@ -407,7 +407,7 @@ def page_q2_city_preferences():
 
 
 def page_q3_basket_size():
-    st.title("Q3: Average Basket Size")
+    st.title("Q3: Average Basket Size 🛒")
     explain_box(
         "Store Efficiency",
         "Which cities have the largest average basket size (items per transaction)?\n\n"
@@ -445,7 +445,7 @@ def page_q3_basket_size():
 
 
 def page_q4_holidays():
-    st.title("Q4: Local vs. National Holidays")
+    st.title("Q4: Local vs. National Holidays 🎊")
     explain_box(
         "Holiday Impact Analysis",
         "Do local holidays generate more sales than national holidays in specific cities?\n\n"
@@ -499,7 +499,7 @@ def page_q4_holidays():
 
 
 def page_q5_seasonality():
-    st.title("Q5: Seasonality (Pivot)")
+    st.title("Q5: Seasonality (Pivot) 📈")
     explain_box(
         "Monthly Sales Trends",
         "This page analyzes sales trends over time, aggregated by month and year, to identify seasonal peaks.\n\n"
@@ -542,7 +542,7 @@ def page_q5_seasonality():
 
 
 def page_q6_perishables():
-    st.title("Q6: Perishable Goods Growth (YoY)")
+    st.title("Q6: Perishable Goods Growth (YoY) ♻️")
     explain_box(
         "Year-Over-Year (YoY) Growth",
         "Which cities are showing the highest growth in the sales of perishable goods?\n\n"
@@ -586,15 +586,23 @@ def page_q6_perishables():
 
 
 def page_feedback():
-    st.title("User Feedback")
+    st.title("User Feedback 💬")
     explain_box(
         "We value your feedback",
         "Please rate the dashboard and provide your comments. Feedback is saved to the SQLite database."
     )
     ensure_feedback_table()
 
+    ADMIN_PASSWORD = "12345"
+
+    # --- ניהול מצב התחברות ---
+    if "admin_logged_in" not in st.session_state:
+        st.session_state["admin_logged_in"] = False
+
+    # --- חלק 1: הוספת משוב ---
+    st.subheader("Add New Feedback")
     with st.form("feedback_form", clear_on_submit=True):
-        user_name = st.text_input("Name (optional)")
+        user_name = st.text_input("Name (Optional)")
         page = st.selectbox("Which page are you reviewing?", [
             "Overview",
             "Raw Data Samples",
@@ -616,19 +624,83 @@ def page_feedback():
             "INSERT INTO feedback(user_name, page, rating, comment) VALUES (?, ?, ?, ?);",
             (user_name, page, int(rating), comment)
         )
-        st.success("Feedback saved successfully")
+        st.success("Feedback saved successfully ✅")
+        st.rerun()
 
+    st.divider()
+
+    # --- חלק 2: צפייה במשובים ---
     st.subheader("Recent Feedback")
-    fb = read_df("SELECT created_at, user_name, page, rating, comment FROM feedback ORDER BY id DESC LIMIT 20;")
-    fb_disp = fb.rename(columns={
-        "created_at": "Date",
-        "user_name": "Name",
-        "page": "Page",
-        "rating": "Rating",
-        "comment": "Comment"
-    })
-    styled_dataframe(fb_disp, height=520)
+    fb = read_df("SELECT id, created_at, user_name, page, rating, comment FROM feedback ORDER BY id DESC;")
 
+    # הצגת הטבלה (רק אם יש נתונים)
+    if fb is not None and not fb.empty:
+        display_fb = fb.rename(columns={
+            "id": "ID",
+            "created_at": "Date",
+            "user_name": "Name",
+            "page": "Page",
+            "rating": "Rating",
+            "comment": "Comment"
+        })
+        st.dataframe(display_fb.set_index("ID"), use_container_width=True, height=300)
+    else:
+        st.info("No feedback available yet.")
+
+    # --- חלק 3: אזור מנהל ---
+    st.markdown("---")
+    with st.expander("🔒 Admin Area"):
+
+        # מצב א': לא מחובר
+        if not st.session_state["admin_logged_in"]:
+            password_input = st.text_input("Enter Admin Password:", type="password")
+            if st.button("Login"):
+                if password_input == ADMIN_PASSWORD:
+                    st.session_state["admin_logged_in"] = True
+                    st.success("Logged in successfully!")
+                    st.rerun()
+                else:
+                    st.error("Incorrect Password ❌")
+
+        # מצב ב': מחובר
+        else:
+            # כפתור התנתקות
+            col_logout, _ = st.columns([1, 4])
+            with col_logout:
+                if st.button("🚪 Log Out"):
+                    st.session_state["admin_logged_in"] = False
+                    st.rerun()
+
+            st.success("Access Granted - Admin Mode Active 🔓")
+
+            if fb is not None and not fb.empty:
+                st.write("Select a feedback to delete.")
+
+                delete_id = st.selectbox("Select ID to Delete", fb["id"].tolist())
+
+                if st.button(f"Delete Feedback #{delete_id}", type="primary"):
+                    # 1. מחיקה
+                    exec_sql("DELETE FROM feedback WHERE id = ?;", (int(delete_id),))
+
+                    # 2. סידור מחדש אוטומטי
+                    all_data = read_df("SELECT * FROM feedback ORDER BY created_at ASC")
+                    if not all_data.empty:
+                        # אם נשארו רשומות - מסדרים מחדש
+                        exec_sql("DELETE FROM feedback")
+                        exec_sql("DELETE FROM sqlite_sequence WHERE name='feedback'")
+                        for _, row in all_data.iterrows():
+                            exec_sql(
+                                "INSERT INTO feedback(created_at, user_name, page, rating, comment) VALUES (?, ?, ?, ?, ?)",
+                                (row['created_at'], row['user_name'], row['page'], row['rating'], row['comment'])
+                            )
+                    else:
+                        # אם מחקנו את האחרון - רק מאפסים את המונה
+                        exec_sql("DELETE FROM sqlite_sequence WHERE name='feedback'")
+
+                    st.success(f"Feedback deleted and IDs renumbered! ✅")
+                    st.rerun()
+            else:
+                st.warning("Table is empty. Nothing to delete.")
 
 # ==============================
 # NAV (Hebrew)
