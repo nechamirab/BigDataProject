@@ -391,13 +391,13 @@ def process_question_6(con):
         sales_year = 2016
         AND prev_year_sales IS NOT NULL -- Remove first year (no previous data)
     ORDER BY total_perishable_sales DESC -- Show biggest stores first
-    LIMIT 10; -- Top 10 stores
+    LIMIT 20; -- Top 20 stores
     """
 
     con.execute(query)
     print("   >> Table 'gold.q6_perishable_growth' created successfully.")
 
-    print("   >> Top 10 Growth Stores:")
+    print("   >> Top 20 Growth Stores:")
     df_sample = con.execute("SELECT * FROM gold.q6_perishable_growth LIMIT 10").fetchdf()
     print(df_sample.to_string(index=False))
 

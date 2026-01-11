@@ -4,6 +4,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
 
 # ==============================
 # CONFIGURATION
@@ -12,31 +14,12 @@ BASE_DIR = Path(".").resolve()
 SQLITE_DB_PATH = BASE_DIR / "dashboard_gold.db"
 
 st.set_page_config(
-    page_title="דאשבורד אנליזה – שכבת GOLD",
+    page_title="Dashboard - Project",
     layout="wide"
 )
 
-# CSS for RTL (Right-to-Left) support for Hebrew text
-# Note: st.dataframe is set to LTR to keep numbers aligned correctly
-st.markdown(
-    """
-    <style>
-    html, body, [class*="css"]  {
-        direction: rtl;
-        text-align: right;
-    }
-    .stSelectbox, .stMultiSelect, .stRadio, .stSlider, .stTextInput, .stTextArea {
-        direction: rtl;
-        text-align: right;
-    }
-    /* Force tables to be LTR for better readability of numbers */
-    .stDataFrame {
-        direction: ltr; 
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# Set Seaborn theme
+sns.set_theme(style="whitegrid")
 
 
 # ==============================
@@ -45,7 +28,7 @@ st.markdown(
 def _assert_db_exists():
     """Checks if the SQLite database file exists."""
     if not SQLITE_DB_PATH.exists():
-        st.error(f"קובץ SQLite לא נמצא: {SQLITE_DB_PATH}")
+        st.error(f"SQLite file not found: {SQLITE_DB_PATH}")
         st.stop()
 
 
@@ -118,7 +101,7 @@ def explain_box(title: str, text: str):
 def styled_dataframe(df: pd.DataFrame, height: int = 420):
     """Renders a DataFrame with a gradient background style."""
     if df is None or df.empty:
-        st.info("אין נתונים להצגה (הטבלה ריקה או שהפילטרים סיננו הכול).")
+        st.info("There is no data to display (the table is empty or the filters have filtered everything out).")
         return
 
     styler = df.style
@@ -231,43 +214,43 @@ def load_q6():
 # DISPLAY COLUMN MAPPINGS
 # ==============================
 MAP_INVENTORY = {
-    "table_name": "שם טבלה",
-    "row_count": "מספר שורות",
-    "col_count": "מספר עמודות",
+    "table_name": "Table name",
+    "row_count": "Number of rows",
+    "col_count": "Number of columns",
 }
 MAP_Q1 = {
-    "item_nbr": "מזהה מוצר",
-    "family": "משפחה",
-    "total_sales": "סך מכירות",
-    "cumulative_pct": "אחוז מצטבר",
-    "pareto_group": "קבוצת פארטו",
+    "item_nbr": "Item ID",
+    "family": "Category",
+    "total_sales": "Total sales",
+    "cumulative_pct": "Cumulative percentage",
+    "pareto_group": "Pareto group",
 }
 MAP_Q2 = {
-    "city": "עיר",
-    "family": "משפחה",
-    "total_sold": "סך נמכר",
-    "rank_in_city": "דירוג בעיר",
+    "city": "City",
+    "family": "Category",
+    "total_sold": "Total sold",
+    "rank_in_city": "Rank in city",
 }
 MAP_Q3 = {
-    "city": "עיר",
-    "total_items_sold": "סך פריטים שנמכרו",
-    "total_transactions": "סך עסקאות",
-    "avg_basket_size": "גודל סל ממוצע",
-    "city_rank": "דירוג עיר",
+    "city": "City",
+    "total_items_sold": "Total items sold",
+    "total_transactions": "Total transactions",
+    "avg_basket_size": "Average basket size",
+    "city_rank": "City rank",
 }
 MAP_Q4 = {
-    "city": "עיר",
-    "national_holiday_avg": "ממוצע חג לאומי",
-    "local_holiday_avg": "ממוצע חג מקומי",
-    "winner_type": "מי מנצח",
-    "local_holiday_rank": "דירוג (מקומי)",
+    "city": "City",
+    "national_holiday_avg": "National holiday average",
+    "local_holiday_avg": "Local holiday average",
+    "winner_type": "The winner",
+    "local_holiday_rank": "Local holiday rank",
 }
 MAP_Q6 = {
-    "city": "עיר",
-    "sales_year": "שנה",
-    "current_sales": "מכירות שנה נוכחית",
-    "previous_sales": "מכירות שנה קודמת",
-    "growth_pct": "אחוז צמיחה",
+    "city": "City",
+    "sales_year": "Year",
+    "current_sales": "Current year sales",
+    "previous_sales": "Previous year sales",
+    "growth_pct": "percent growth",
 }
 
 
@@ -275,17 +258,17 @@ MAP_Q6 = {
 # PAGES
 # ==============================
 def page_overview():
-    st.title("סקירה כללית")
+    st.title("Overview")
     explain_box(
-        "על מה הדף הזה מדבר?",
-        "זהו דף מבוא שמציג תמונת מצב על שכבת ה-GOLD: כמה טבלאות נוצרו, כמה שורות/עמודות יש בכל אחת, "
-        "ומה היקף הנתונים הכולל. הדף משתמש בטבלה gold_inventory ומוכיח שהנתונים מוכנים לדאשבורד."
+        "About the Dashboard",
+        "This dashboard presents business insights derived from large-scale retail data. The data has been processed (ETL) and stored in a GOLD layer (SQLite) for optimal performance.\n\n"
+        "**What's on this page:** A summary of the available data tables, including row counts and table types (Analysis vs. Samples)."
     )
-    st.caption(f"מקור נתונים: {SQLITE_DB_PATH}")
+    st.caption(f"Data source: {SQLITE_DB_PATH}")
 
     inv = load_inventory()
     if inv is None or inv.empty:
-        st.error("הטבלה gold_inventory לא נמצאה או ריקה. ודאי שהרצת את stage_e_analysis.py בהצלחה.")
+        st.error("The gold_inventory table was not found or is empty. You must have successfully run stage_e_analysis.py.")
         return
 
     gold_count = int((inv["table_name"].astype(str).str.startswith("q")).sum())
@@ -294,13 +277,13 @@ def page_overview():
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.metric("מספר טבלאות GOLD", gold_count)
+        st.metric("Number of GOLD tables", gold_count)
     with c2:
-        st.metric("מספר טבלאות SAMPLE", sample_count)
+        st.metric("Number of SAMPLE tables", sample_count)
     with c3:
-        st.metric("סך שורות בכל הטבלאות", f"{total_rows:,}")
+        st.metric("Total rows in all tables", f"{total_rows:,}")
 
-    st.subheader("מלאי טבלאות (gold_inventory)")
+    st.subheader("Table inventory (gold_inventory)")
     inv_disp = rename_columns_for_display(inv, MAP_INVENTORY)
     styled_dataframe(inv_disp, height=520)
 
@@ -309,11 +292,10 @@ def page_raw_data():
     """
     NEW PAGE: Displays raw data samples (required by assignment).
     """
-    st.title("נתונים גולמיים (דגימות) 🔍")
-    explain_box(
-        "חקירת נתונים גולמיים",
-        "כאן ניתן לצפות ב-150 שורות לדוגמה מתוך כל טבלה מקורית (Train, Items, Stores וכו'). "
-        "זה מאפשר להבין את מבנה הנתונים לפני האגרגציות."
+    st.title("Raw data (samples)")
+    explain_box("Data Exploration",
+        "This page allows you to inspect the structure of the original data tables before any aggregation.\n\n"
+             "**What's on this page:** A dropdown menu to select a table (e.g., Train, Items, Stores) and a view of 150 sample rows from that table."
     )
 
     inv = load_inventory()
@@ -322,51 +304,50 @@ def page_raw_data():
         sample_tables = inv[inv["table_name"].astype(str).str.startswith("sample_")]["table_name"].tolist()
 
         if sample_tables:
-            selected_table = st.selectbox("בחר טבלה להצגה:", sample_tables)
+            selected_table = st.selectbox("Select table:", sample_tables)
 
             if selected_table:
                 df = load_table(selected_table)
-                st.subheader(f"תצוגה מקדימה: {selected_table}")
-                st.write(f"מידות הטבלה: {df.shape[0]} שורות, {df.shape[1]} עמודות")
+                st.subheader(f"Preview: {selected_table}")
+                st.write(f"Shape: {df.shape[0]} rows, {df.shape[1]} columns")
                 styled_dataframe(df, height=600)
         else:
-            st.warning("לא נמצאו טבלאות דגימה (sample_*) בבסיס הנתונים.")
+            st.warning("No sample tables (sample_*) found in the database.")
     else:
-        st.error("שגיאה בטעינת רשימת הטבלאות.")
+        st.error("Error loading inventory table.")
 
 
 def page_q1_pareto():
-    st.title("שאלה 1: ניתוח פארטו (80/20)")
+    st.title("Q1: Pareto Analysis (80/20)")
     explain_box(
-        "על מה הדף הזה מדבר?",
-        "הדף בודק האם מספר קטן של מוצרים אחראי לרוב המכירות (עקרון 80/20). "
-        "מוצגת טבלה של מוצרים לפי סך מכירות, כולל אחוז מצטבר וקבוצת פארטו, ובנוסף גרף שממחיש את עקומת פארטו."
+        "Inventory Efficiency",
+        "This analysis checks if the '80/20 rule' applies here: Does a small number of products generate the majority (80%) of the revenue?\n\n"
+             "**What's on this page:** A table showing products sorted by sales with their Pareto group classification, and a line chart visualizing the cumulative sales curve."
     )
 
     df = load_q1()
     if df is None or df.empty:
-        st.error("q1_pareto_analysis לא קיימת/ריקה ב-SQLite.")
+        st.error("q1_pareto_analysis does not exist/is empty in SQLite.")
         return
 
-    families = ["(הכול)"] + sorted(df["family"].dropna().unique().tolist())
-    selected_family = st.selectbox("סינון לפי משפחת מוצרים", families)
+    families = ["(All)"] + sorted(df["family"].dropna().unique().tolist())
+    selected_family = st.selectbox("ilter by Category", families)
 
     filtered = df.copy()
-    if selected_family != "(הכול)":
+    if selected_family != "(All)":
         filtered = filtered[filtered["family"] == selected_family]
 
-    st.subheader("תובנה מהירה")
+    st.subheader("Quick Insight")
     core_items = (filtered["pareto_group"].astype(str).str.startswith("Top")).sum()
     total_items = len(filtered)
     core_pct = (core_items / total_items) * 100 if total_items else 0
-    st.write(f"מתוך **{total_items:,}** מוצרים, כ-**{core_pct:.2f}%** נמצאים בקבוצת 'Top 80% (Core Revenue)'.")
-    st.caption("שימי לב: הטקסט בגרפים נשאר באנגלית כדי למנוע בעיות RTL.")
+    st.write(f"Out of **{total_items:,}** products, approximately **{core_pct:.2f}%** are in the 'Top 80% (Core Revenue)' group.")
 
-    st.subheader("טבלת מוצרים מובילים (Top 50)")
+    st.subheader("Top Products Table (Top 50")
     disp = rename_columns_for_display(filtered, MAP_Q1)
     styled_dataframe(disp.head(50))
 
-    st.subheader("גרף: Pareto Curve (Top 500)")
+    st.subheader("Pareto Curve")
     plot_df = filtered.head(500).copy()
     plot_df["rank"] = range(1, len(plot_df) + 1)
 
@@ -378,67 +359,76 @@ def page_q1_pareto():
         ylabel="Cumulative % of Sales"
     )
 
+    st.markdown(
+        "**Chart Description:** The X-axis displays the product ranking by sales (from best-selling to least), "
+        "and the Y-axis shows the **Cumulative Sales %**. "
+        "A steep rise at the beginning indicates that a few products generate a large portion of the sales."
+    )
 
 def page_q2_city_preferences():
-    st.title("שאלה 2: העדפות אזוריות לפי עיר (Top-3)")
+    st.title("Q2: Regional Preferences (Top-3)")
     explain_box(
-        "על מה הדף הזה מדבר?",
-        "הדף מציג לכל עיר את 3 משפחות המוצרים הנמכרות ביותר. "
-        "אפשר לבחור עיר כדי לראות תוצאות ממוקדות, ולצפות גם בגרף עמודות של שלושת המובילים."
+        "Localization Analysis",
+        "What are the top 3 selling product categories in each city? This helps understand local consumer behavior.\n\n"
+             "**What's on this page:** A city selector, a bar chart displaying the top 3 categories for the selected city, and a detailed table of rankings."
     )
 
     df = load_q2()
     if df is None or df.empty:
-        st.error("q2_top_products_city לא קיימת/ריקה ב-SQLite.")
+        st.error("q2_top_products_city does not exist/is empty in SQLite.")
         return
 
-    cities = ["(הכול)"] + sorted(df["city"].dropna().unique().tolist())
-    selected_city = st.selectbox("בחרי עיר", cities)
+    cities = ["(All)"] + sorted(df["city"].dropna().unique().tolist())
+    selected_city = st.selectbox("Select City", cities)
 
     filtered = df.copy()
-    if selected_city != "(הכול)":
+    if selected_city != "(All)":
         filtered = filtered[filtered["city"] == selected_city]
 
-    st.subheader("Top-3 משפחות מוצרים")
+    st.subheader(f"Top Categories in {selected_city}")
     disp = rename_columns_for_display(filtered, MAP_Q2)
     styled_dataframe(disp, height=520)
 
-    if selected_city != "(הכול)" and not filtered.empty:
-        st.subheader(f"גרף: Top-3 in {selected_city}")
+    if selected_city != "(All)" and not filtered.empty:
+        st.subheader(f"Chart: Top-3 in {selected_city}")
         safe_bar_chart(
             x=filtered["family"],
             y=filtered["total_sold"],
             title="Top-3 Product Families by City",
-            xlabel="Family",
+            xlabel="Category",
             ylabel="Total Sold",
             rotate_xticks=True
+        )
+        st.markdown(
+            "**Chart Description:** A bar chart showing the **Top 3 leading product categories** in the selected city, "
+            "where the height of each bar represents the **total units sold** for that category. "
+            "This helps identify the specific consumer preferences of the city."
         )
 
 
 def page_q3_basket_size():
-    st.title("שאלה 3: גודל סל קנייה ממוצע")
+    st.title("Q3: Average Basket Size")
     explain_box(
-        "על מה הדף הזה מדבר?",
-        "הדף בוחן באילו ערים גודל סל הקנייה הממוצע גדול יותר. "
-        "המדד מחושב כ-(סך פריטים שנמכרו) / (סך עסקאות). "
-        "אפשר לבחור כמה ערים מובילות להציג (Top-N) ולקבל גם גרף."
+        "Store Efficiency",
+        "Which cities have the largest average basket size (items per transaction)?\n\n"
+        "**What's on this page:** A slider to choose the number of top cities, a bar chart comparing basket sizes, and a ranked table."
     )
 
     df = load_q3()
     if df is None or df.empty:
-        st.error("q3_basket_size_analysis לא קיימת/ריקה ב-SQLite.")
+        st.error("q3_basket_size_analysis does not exist/is empty in SQLite.")
         return
 
     max_n = max(5, min(22, len(df)))
-    top_n = st.slider("כמה ערים להציג (Top-N)", min_value=5, max_value=max_n, value=min(10, max_n), step=1)
+    top_n = st.slider("Select Top N Cities", min_value=5, max_value=max_n, value=min(10, max_n), step=1)
 
     top_df = df.head(top_n).copy()
 
-    st.subheader(f"טבלת Top {top_n} ערים לפי גודל סל")
+    st.subheader(f"Top {top_n} Cities by Basket Size")
     disp = rename_columns_for_display(top_df, MAP_Q3)
     styled_dataframe(disp)
 
-    st.subheader("גרף: Basket Size by City (Top-N)")
+    st.subheader("Chart: Basket Size by City (Top-N)")
     safe_bar_chart(
         x=top_df["city"],
         y=top_df["avg_basket_size"],
@@ -447,72 +437,91 @@ def page_q3_basket_size():
         ylabel="Avg Basket Size",
         rotate_xticks=True
     )
+    st.markdown(
+        "**Chart Description:** A bar chart displaying the **Average Basket Size** (items per transaction) "
+        "for each city (in the Top-N). A taller bar indicates that, on average, customers in that city "
+        "purchase more items per visit."
+    )
 
 
 def page_q4_holidays():
-    st.title("שאלה 4: השפעת חגים – מקומי מול לאומי")
+    st.title("Q4: Local vs. National Holidays")
     explain_box(
-        "על מה הדף הזה מדבר?",
-        "הדף משווה לכל עיר את ממוצע המכירות בחגים מקומיים מול ממוצע המכירות בחגים לאומיים. "
-        "הטבלה מציגה גם מי 'מנצח' בכל עיר, ובגרף פיזור רואים את הפערים בצורה חזותית."
+        "Holiday Impact Analysis",
+        "Do local holidays generate more sales than national holidays in specific cities?\n\n"
+        "**What's on this page:** A scatter plot where each point represents a city, and a comparison table. Points above the diagonal line indicate stronger Local holidays."
     )
 
     df = load_q4()
     if df is None or df.empty:
-        st.error("q4_holiday_impact לא קיימת/ריקה ב-SQLite.")
+        st.error("q4_holiday_impact does not exist/is empty in SQLite.")
         return
 
-    choice = st.radio("סינון לפי 'מי מנצח'", ["הכול", "מקומי", "לאומי"], horizontal=True)
+    choice = st.radio("Filter by Winner", ["All", "Local", "National"], horizontal=True)
     filtered = df.copy()
 
-    if choice == "מקומי":
+    if choice == "Local":
         filtered = filtered[filtered["winner_type"] == "Local"]
-    elif choice == "לאומי":
+    elif choice == "National":
         filtered = filtered[filtered["winner_type"] == "National"]
 
-    # display winner in Hebrew (display only)
-    filtered_disp = filtered.copy()
-    filtered_disp["winner_type"] = filtered_disp["winner_type"].replace({"Local": "מקומי", "National": "לאומי"})
-
-    st.subheader("טבלת השפעת חגים")
-    disp = rename_columns_for_display(filtered_disp, MAP_Q4)
+    st.subheader("Holiday Impact Table")
+    disp = rename_columns_for_display(filtered, MAP_Q4)
     styled_dataframe(disp, height=520)
 
-    st.subheader("גרף: Local vs National (Scatter)")
-    safe_scatter(
-        x=filtered["national_holiday_avg"],
-        y=filtered["local_holiday_avg"],
-        title="Local vs National Holiday Impact",
-        xlabel="National Holiday Avg Sales",
-        ylabel="Local Holiday Avg Sales"
+    st.subheader("Chart: Local vs National (Scatter)")
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.scatterplot(
+        data=filtered,
+        x='national_holiday_avg',
+        y='local_holiday_avg',
+        hue='winner_type',
+        style='winner_type',
+        s=100,
+        ax=ax
+    )
+
+    lims = [
+        np.min([ax.get_xlim(), ax.get_ylim()]),
+        np.max([ax.get_xlim(), ax.get_ylim()]),
+    ]
+    ax.plot(lims, lims, 'r--', alpha=0.5, zorder=0)
+    ax.set_title("Local vs National Holiday Impact", fontsize=16)
+    ax.set_xlabel("National Holiday Avg Sales", fontsize=12)
+    ax.set_ylabel("Local Holiday Avg Sales", fontsize=12)
+    st.pyplot(fig)
+    st.markdown(
+        "**Chart Description:** Each point represents a city. The X-axis is **Average National Holiday Sales**, "
+        "and the Y-axis is **Average Local Holiday Sales**. "
+        "Points appearing *above the diagonal line* (Y>X) indicate that Local holidays generate more sales in that city."
     )
 
 
 def page_q5_seasonality():
-    st.title("שאלה 5: עונתיות במכירות (PIVOT)")
+    st.title("Q5: Seasonality (Pivot)")
     explain_box(
-        "על מה הדף הזה מדבר?",
-        "הדף מציג טבלת PIVOT: שורות הן שנים ועמודות הן חודשים (1–12). "
-        "כך אפשר לזהות עונתיות במכירות לאורך השנה. "
-        "ניתן לבחור אילו שנים להציג, ובגרף מוצג ממוצע מכירות חודשי על פני השנים שנבחרו."
+        "Monthly Sales Trends",
+        "This page analyzes sales trends over time, aggregated by month and year, to identify seasonal peaks.\n\n"
+        "**What's on this page:** A filter for years, a line chart showing monthly sales, and a Pivot table."
     )
 
     df = load_q5()
     if df is None or df.empty:
-        st.error("q5_sales_monthly_pivot לא קיימת/ריקה ב-SQLite.")
+        st.error("q5_sales_monthly_pivot does not exist/is empty in SQLite.")
         return
 
     years = sorted(df["year"].dropna().unique().tolist())
-    selected_years = st.multiselect("בחירת שנים להצגה", years, default=years)
+    selected_years = st.multiselect("Select Years", years, default=years)
     filtered = df[df["year"].isin(selected_years)].copy()
 
-    st.subheader("טבלת PIVOT (Year × Month)")
+    st.subheader("Pivot Table (Year × Month)")
     styled_dataframe(filtered, height=380)
 
-    st.subheader("גרף: Monthly Average (selected years)")
+    st.subheader("Chart: Monthly Average (selected years)")
     month_cols = [c for c in filtered.columns if str(c) in [str(i) for i in range(1, 13)]]
     if not month_cols:
-        st.info("לא נמצאו עמודות חודשים (1..12) בטבלת q5_sales_monthly_pivot.")
+        st.info("No month columns (1..12) found in table q5_sales_monthly_pivot.")
         return
 
     avg_series = filtered[month_cols].mean(numeric_only=True)
@@ -526,88 +535,97 @@ def page_q5_seasonality():
         xlabel="Month",
         ylabel="Average Sales"
     )
+    st.markdown(
+        "**Chart Description:** A line chart showing the **Average Sales per Month** (1–12) across the selected years. "
+        "Peaks or troughs indicate seasonality — specific months that consistently see higher or lower sales."
+    )
 
 
 def page_q6_perishables():
-    st.title("שאלה 6: צמיחה שנתית במוצרים מתכלים (YoY)")
+    st.title("Q6: Perishable Goods Growth (YoY)")
     explain_box(
-        "על מה הדף הזה מדבר?",
-        "הדף מנתח צמיחה שנה-מול-שנה (YoY) עבור מכירות מוצרים מתכלים. "
-        "אפשר לסנן לפי עיר, לראות את אחוז הצמיחה, ולקבל גרף של הערכים הגבוהים ביותר."
+        "Year-Over-Year (YoY) Growth",
+        "Which cities are showing the highest growth in the sales of perishable goods?\n\n"
+        "**What's on this page:** A bar chart showing the top 20 cities by growth percentage, and a comparison table."
     )
 
     df = load_q6()
     if df is None or df.empty:
-        st.error("q6_perishable_growth לא קיימת/ריקה ב-SQLite.")
+        st.error("q6_perishable_growth does not exist/is empty in SQLite.")
         return
 
-    cities = ["(הכול)"] + sorted(df["city"].dropna().unique().tolist())
-    selected_city = st.selectbox("סינון לפי עיר", cities)
+    cities = ["(All)"] + sorted(df["city"].dropna().unique().tolist())
+    selected_city = st.selectbox("Filter by City", cities)
 
     filtered = df.copy()
-    if selected_city != "(הכול)":
+    if selected_city != "(All)":
         filtered = filtered[filtered["city"] == selected_city]
 
-    st.subheader("טבלת YoY Growth")
+    st.subheader("YoY Growth Table")
     disp = rename_columns_for_display(filtered, MAP_Q6)
     styled_dataframe(disp, height=520)
 
-    st.subheader("גרף: Top 10 by Growth %")
+    st.subheader("Chart: Top 20 by Growth %")
     plot_df = filtered.sort_values("growth_pct", ascending=False).head(10)
     if plot_df.empty:
-        st.info("אין נתונים לגרף לפי הפילטר הנוכחי.")
+        st.info("No data for chart based on current filter.")
         return
 
     safe_bar_chart(
         x=plot_df["city"],
         y=plot_df["growth_pct"],
-        title="Top 10 Growth Percentage (YoY)",
+        title="Top 20 Growth Percentage (YoY)",
         xlabel="City",
         ylabel="Growth %"
+    )
+    st.markdown(
+        "**Chart Description:** A bar chart showing the **Top 20 Cities by YoY Growth %** "
+        "based on the current filter. A taller bar represents higher growth compared to the previous year. "
+        "This helps identify hotspots where the demand for perishable goods is rising rapidly."
     )
 
 
 def page_feedback():
-    st.title("משוב משתמשים")
+    st.title("User Feedback")
     explain_box(
-        "על מה הדף הזה מדבר?",
-        "זהו דף אינטראקטיבי שמאפשר להשאיר משוב על הדאשבורד. "
-        "המשוב נשמר בטבלת SQLite בשם feedback, ובתחתית הדף מוצגים המשובים האחרונים."
+        "We value your feedback",
+        "Please rate the dashboard and provide your comments. Feedback is saved to the SQLite database."
     )
     ensure_feedback_table()
 
-    with st.form("feedback_form"):
-        user_name = st.text_input("שם (לא חובה)")
-        page = st.selectbox("על איזה דף המשוב?", [
-            "סקירה כללית",
-            "שאלה 1: פארטו",
-            "שאלה 2: העדפות לפי עיר",
-            "שאלה 3: גודל סל",
-            "שאלה 4: חגים",
-            "שאלה 5: עונתיות",
-            "שאלה 6: מתכלים",
-            "כללי"
+    with st.form("feedback_form", clear_on_submit=True):
+        user_name = st.text_input("Name (optional)")
+        page = st.selectbox("Which page are you reviewing?", [
+            "Overview",
+            "Raw Data Samples",
+            "Q1: Pareto (80/20)",
+            "Q2: City Preferences",
+            "Q3: Basket Size",
+            "Q4: Holiday Impact",
+            "Q5: Seasonality",
+            "Q6: Growth (YoY)",
+            "General"
         ])
-        rating = st.radio("דירוג (1-5)", [1, 2, 3, 4, 5], index=4, horizontal=True)
-        comment = st.text_area("הערות", placeholder="מה עבד טוב? מה לשפר?")
+        rating = st.radio("Rating (1-5)", [1, 2, 3, 4, 5], index=4, horizontal=True)
+        comment = st.text_area("Comments", placeholder="What worked well? What to improve?")
 
-        submitted = st.form_submit_button("שליחה")
+        submitted = st.form_submit_button("Submit")
 
     if submitted:
         exec_sql(
             "INSERT INTO feedback(user_name, page, rating, comment) VALUES (?, ?, ?, ?);",
             (user_name, page, int(rating), comment)
         )
-        st.success("המשוב נשמר בהצלחה ✅")
+        st.success("Feedback saved successfully")
 
-    st.subheader("משובים אחרונים")
+    st.subheader("Recent Feedback")
     fb = read_df("SELECT created_at, user_name, page, rating, comment FROM feedback ORDER BY id DESC LIMIT 20;")
     fb_disp = fb.rename(columns={
-        "created_at": "תאריך",
-        "user_name": "שם",
-        "page": "דף",
-        "rating": "דירוג",
-        "comment": "תגובה"
+        "created_at": "Date",
+        "user_name": "Name",
+        "page": "Page",
+        "rating": "Rating",
+        "comment": "Comment"
     })
     styled_dataframe(fb_disp, height=520)
 
@@ -616,18 +634,18 @@ def page_feedback():
 # NAV (Hebrew)
 # ==============================
 PAGES = {
-    "סקירה כללית": page_overview,
-    "נתונים גולמיים (דגימות)": page_raw_data,  # Added the new page here
-    "שאלה 1: ניתוח פארטו (80/20)": page_q1_pareto,
-    "שאלה 2: העדפות לפי עיר (Top-3)": page_q2_city_preferences,
-    "שאלה 3: גודל סל קנייה": page_q3_basket_size,
-    "שאלה 4: השפעת חגים": page_q4_holidays,
-    "שאלה 5: עונתיות במכירות (PIVOT)": page_q5_seasonality,
-    "שאלה 6: מוצרים מתכלים (YoY)": page_q6_perishables,
-    "משוב": page_feedback,
+    "Overview": page_overview,
+    "Raw Data Samples": page_raw_data,
+    "Q1: Pareto (80/20)": page_q1_pareto,
+    "Q2: City Preferences": page_q2_city_preferences,
+    "Q3: Basket Size": page_q3_basket_size,
+    "Q4: Holiday Impact": page_q4_holidays,
+    "Q5: Seasonality": page_q5_seasonality,
+    "Q6: Growth (YoY)": page_q6_perishables,
+    "Feedback": page_feedback,
 }
 
-st.sidebar.title("ניווט")
-st.sidebar.caption("הדאשבורד קורא מ-SQLite בלבד (dashboard_gold.db).")
-choice = st.sidebar.radio("מעבר לדף", list(PAGES.keys()))
+st.sidebar.title("Navigation")
+st.sidebar.caption("Dashboard reads from SQLite only (dashboard_gold.db).")
+choice = st.sidebar.radio("Go to Page", list(PAGES.keys()))
 PAGES[choice]()
