@@ -500,7 +500,6 @@ def vacuum_sqlite_database():
 
 def verify_sqlite_tables_direct():
     print("\n--- Direct SQLite Verification ---")
-    import sqlite3
     conn = sqlite3.connect(SQLITE_DB_PATH)
     rows = conn.execute("""
         SELECT name FROM sqlite_master

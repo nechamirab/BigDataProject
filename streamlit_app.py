@@ -5,9 +5,8 @@ import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 
-
 # ==============================
-# CONFIG
+# CONFIGURATION
 # ==============================
 BASE_DIR = Path(".").resolve()
 SQLITE_DB_PATH = BASE_DIR / "dashboard_gold.db"
@@ -17,7 +16,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# RTL for Hebrew pages (NOT for plots text)
+# CSS for RTL (Right-to-Left) support for Hebrew text
+# Note: st.dataframe is set to LTR to keep numbers aligned correctly
 st.markdown(
     """
     <style>
@@ -29,6 +29,10 @@ st.markdown(
         direction: rtl;
         text-align: right;
     }
+    /* Force tables to be LTR for better readability of numbers */
+    .stDataFrame {
+        direction: ltr; 
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -36,20 +40,23 @@ st.markdown(
 
 
 # ==============================
-# DB HELPERS
+# DATABASE HELPERS
 # ==============================
 def _assert_db_exists():
+    """Checks if the SQLite database file exists."""
     if not SQLITE_DB_PATH.exists():
         st.error(f"קובץ SQLite לא נמצא: {SQLITE_DB_PATH}")
         st.stop()
 
 
 def get_conn():
+    """Establishes a connection to the SQLite database."""
     _assert_db_exists()
     return sqlite3.connect(SQLITE_DB_PATH)
 
 
 def read_df(query: str, params=None) -> pd.DataFrame:
+    """Executes a SQL query and returns a Pandas DataFrame."""
     conn = get_conn()
     try:
         return pd.read_sql_query(query, conn, params=params)
@@ -58,6 +65,7 @@ def read_df(query: str, params=None) -> pd.DataFrame:
 
 
 def exec_sql(query: str, params=None):
+    """Executes a SQL command (INSERT, UPDATE, CREATE)."""
     conn = get_conn()
     try:
         cur = conn.cursor()
@@ -71,6 +79,7 @@ def exec_sql(query: str, params=None):
 
 
 def ensure_feedback_table():
+    """Creates the feedback table if it does not exist."""
     exec_sql(
         """
         CREATE TABLE IF NOT EXISTS feedback (
@@ -107,6 +116,7 @@ def explain_box(title: str, text: str):
 
 
 def styled_dataframe(df: pd.DataFrame, height: int = 420):
+    """Renders a DataFrame with a gradient background style."""
     if df is None or df.empty:
         st.info("אין נתונים להצגה (הטבלה ריקה או שהפילטרים סיננו הכול).")
         return
@@ -114,25 +124,31 @@ def styled_dataframe(df: pd.DataFrame, height: int = 420):
     styler = df.style
     num_cols = df.select_dtypes(include="number").columns.tolist()
     if num_cols:
-        styler = styler.background_gradient(subset=num_cols)
+        # Gradient background for numerical columns
+        styler = styler.background_gradient(subset=num_cols, cmap="Blues")
 
     st.dataframe(styler, use_container_width=True, height=height)
 
 
 def rename_columns_for_display(df: pd.DataFrame, mapping: dict) -> pd.DataFrame:
+    """Renames columns from English to Hebrew for display purposes."""
     if df is None or df.empty:
         return df
     cols = {c: mapping[c] for c in df.columns if c in mapping}
     return df.rename(columns=cols)
 
 
+# ==============================
+# PLOTTING FUNCTIONS (Original)
+# ==============================
 def safe_bar_chart(x, y, title, xlabel, ylabel, rotate_xticks=False):
     """Plot with English-only labels to avoid RTL issues."""
-    fig = plt.figure()
-    plt.bar(x, y)
-    plt.title(title)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    fig = plt.figure(figsize=(10, 5))
+    plt.bar(x, y, color='skyblue')
+    plt.title(title, fontsize=14)
+    plt.xlabel(xlabel, fontsize=12)
+    plt.ylabel(ylabel, fontsize=12)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
     if rotate_xticks:
         plt.xticks(rotation=45, ha="right")
     st.pyplot(fig)
@@ -140,21 +156,30 @@ def safe_bar_chart(x, y, title, xlabel, ylabel, rotate_xticks=False):
 
 def safe_line_chart(x, y, title, xlabel, ylabel):
     """Plot with English-only labels to avoid RTL issues."""
-    fig = plt.figure()
-    plt.plot(x, y)
-    plt.title(title)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    fig = plt.figure(figsize=(10, 5))
+    plt.plot(x, y, marker='o', linestyle='-')
+    plt.title(title, fontsize=14)
+    plt.xlabel(xlabel, fontsize=12)
+    plt.ylabel(ylabel, fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.7)
     st.pyplot(fig)
 
 
 def safe_scatter(x, y, title, xlabel, ylabel):
     """Plot with English-only labels to avoid RTL issues."""
-    fig = plt.figure()
-    plt.scatter(x, y)
-    plt.title(title)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    fig = plt.figure(figsize=(8, 6))
+    plt.scatter(x, y, alpha=0.7)
+
+    # Add diagonal line for reference
+    lims = [
+        min(plt.xlim()[0], plt.ylim()[0]),
+        max(plt.xlim()[1], plt.ylim()[1]),
+    ]
+    plt.plot(lims, lims, 'r--', alpha=0.5)
+
+    plt.title(title, fontsize=14)
+    plt.xlabel(xlabel, fontsize=12)
+    plt.ylabel(ylabel, fontsize=12)
     st.pyplot(fig)
 
 
@@ -164,6 +189,12 @@ def safe_scatter(x, y, title, xlabel, ylabel):
 @st.cache_data(show_spinner=False)
 def load_inventory():
     return read_df("SELECT * FROM gold_inventory ORDER BY table_name;")
+
+
+@st.cache_data(show_spinner=False)
+def load_table(table_name):
+    """Generic loader for raw sample tables."""
+    return read_df(f"SELECT * FROM {table_name}")
 
 
 @st.cache_data(show_spinner=False)
@@ -197,7 +228,7 @@ def load_q6():
 
 
 # ==============================
-# DISPLAY COLUMN MAPPINGS (Hebrew for tables only)
+# DISPLAY COLUMN MAPPINGS
 # ==============================
 MAP_INVENTORY = {
     "table_name": "שם טבלה",
@@ -274,6 +305,36 @@ def page_overview():
     styled_dataframe(inv_disp, height=520)
 
 
+def page_raw_data():
+    """
+    NEW PAGE: Displays raw data samples (required by assignment).
+    """
+    st.title("נתונים גולמיים (דגימות) 🔍")
+    explain_box(
+        "חקירת נתונים גולמיים",
+        "כאן ניתן לצפות ב-150 שורות לדוגמה מתוך כל טבלה מקורית (Train, Items, Stores וכו'). "
+        "זה מאפשר להבין את מבנה הנתונים לפני האגרגציות."
+    )
+
+    inv = load_inventory()
+    if inv is not None and not inv.empty:
+        # Filter for tables starting with "sample_"
+        sample_tables = inv[inv["table_name"].astype(str).str.startswith("sample_")]["table_name"].tolist()
+
+        if sample_tables:
+            selected_table = st.selectbox("בחר טבלה להצגה:", sample_tables)
+
+            if selected_table:
+                df = load_table(selected_table)
+                st.subheader(f"תצוגה מקדימה: {selected_table}")
+                st.write(f"מידות הטבלה: {df.shape[0]} שורות, {df.shape[1]} עמודות")
+                styled_dataframe(df, height=600)
+        else:
+            st.warning("לא נמצאו טבלאות דגימה (sample_*) בבסיס הנתונים.")
+    else:
+        st.error("שגיאה בטעינת רשימת הטבלאות.")
+
+
 def page_q1_pareto():
     st.title("שאלה 1: ניתוח פארטו (80/20)")
     explain_box(
@@ -316,11 +377,6 @@ def page_q1_pareto():
         xlabel="Item Rank (by Total Sales)",
         ylabel="Cumulative % of Sales"
     )
-    st.markdown(
-        "**תיאור הגרף:** ציר ה־X מציג את דירוג המוצרים לפי מכירות (מהמוכר ביותר והלאה), "
-        "וציר ה־Y מציג את **אחוז המכירות המצטבר**. "
-        "אם העקומה עולה מהר בתחילת הדרך — זה סימן שמעט מוצרים מייצרים חלק גדול מהמכירות."
-    )
 
 
 def page_q2_city_preferences():
@@ -357,11 +413,6 @@ def page_q2_city_preferences():
             ylabel="Total Sold",
             rotate_xticks=True
         )
-        st.markdown(
-            "**תיאור הגרף:** גרף עמודות שמציג את **3 משפחות המוצרים המובילות בעיר שנבחרה**, "
-            "כאשר גובה כל עמודה מייצג את **סך היחידות שנמכרו** עבור אותה משפחה. "
-            "כך אפשר להבין במה העיר מתמחה מבחינת ביקוש."
-        )
 
 
 def page_q3_basket_size():
@@ -395,11 +446,6 @@ def page_q3_basket_size():
         xlabel="City",
         ylabel="Avg Basket Size",
         rotate_xticks=True
-    )
-    st.markdown(
-        "**תיאור הגרף:** גרף עמודות שמציג לכל עיר (ב־Top-N) את **גודל הסל הממוצע** "
-        "(מספר פריטים ממוצע לעסקה). "
-        "עמודה גבוהה יותר אומרת שבממוצע לקוחות בעיר קונים יותר פריטים בכל קנייה."
     )
 
 
@@ -439,12 +485,6 @@ def page_q4_holidays():
         title="Local vs National Holiday Impact",
         xlabel="National Holiday Avg Sales",
         ylabel="Local Holiday Avg Sales"
-    )
-    st.markdown(
-        "**תיאור הגרף:** כל נקודה מייצגת עיר. ציר ה־X הוא **ממוצע מכירות בחגים לאומיים**, "
-        "וציר ה־Y הוא **ממוצע מכירות בחגים מקומיים**. "
-        "נקודות שמופיעות *מעל האלכסון הדמיוני* (Y>X) מעידות שחגים מקומיים חזקים יותר בעיר הזו, "
-        "ומתחתיו — חגים לאומיים חזקים יותר."
     )
 
 
@@ -486,10 +526,6 @@ def page_q5_seasonality():
         xlabel="Month",
         ylabel="Average Sales"
     )
-    st.markdown(
-        "**תיאור הגרף:** קו שמציג את **ממוצע המכירות לכל חודש** (1–12) על פני השנים שנבחרו. "
-        "שיאים/שקעים לאורך החודשים מצביעים על עונתיות — חודשים שבהם יש בדרך כלל יותר או פחות מכירות."
-    )
 
 
 def page_q6_perishables():
@@ -529,11 +565,6 @@ def page_q6_perishables():
         xlabel="City",
         ylabel="Growth %"
     )
-    st.markdown(
-        "**תיאור הגרף:** גרף עמודות שמציג את **10 הערכים הגבוהים ביותר של אחוז הצמיחה (YoY)** "
-        "לפי הפילטר הנוכחי. עמודה גבוהה יותר = צמיחה גבוהה יותר לעומת השנה הקודמת. "
-        "זה מאפשר לזהות מוקדים שבהם המכירות של מתכלים גדלות מהר."
-    )
 
 
 def page_feedback():
@@ -557,7 +588,7 @@ def page_feedback():
             "שאלה 6: מתכלים",
             "כללי"
         ])
-        rating = st.slider("דירוג (1-5)", 1, 5, 5)
+        rating = st.radio("דירוג (1-5)", [1, 2, 3, 4, 5], index=4, horizontal=True)
         comment = st.text_area("הערות", placeholder="מה עבד טוב? מה לשפר?")
 
         submitted = st.form_submit_button("שליחה")
@@ -586,6 +617,7 @@ def page_feedback():
 # ==============================
 PAGES = {
     "סקירה כללית": page_overview,
+    "נתונים גולמיים (דגימות)": page_raw_data,  # Added the new page here
     "שאלה 1: ניתוח פארטו (80/20)": page_q1_pareto,
     "שאלה 2: העדפות לפי עיר (Top-3)": page_q2_city_preferences,
     "שאלה 3: גודל סל קנייה": page_q3_basket_size,
