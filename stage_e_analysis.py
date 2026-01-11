@@ -401,68 +401,80 @@ def process_question_6(con):
     df_sample = con.execute("SELECT * FROM gold.q6_perishable_growth LIMIT 10").fetchdf()
     print(df_sample.to_string(index=False))
 
-'''
-def explore_data_trends(duck_con):
-    print("\n--- Exploratory Data Analysis: Sales Heatmap ---")
 
-    # שאילתת PIVOT ידנית
-    # אנחנו מסכמים את המכירות לכל חודש ושמים אותם בעמודות נפרדות
+def process_question_7_cube(con):
+    """
+    Q7: Geographic Hierarchy using CUBE.
+    Analyzes sales at multiple levels: National -> State -> City.
+    CUBE generates subtotals for all combinations.
+    """
+    print("\nProcessing Question 7: Geographic Hierarchy (CUBE)...")
+
     query = """
+    CREATE OR REPLACE TABLE gold.q7_geo_cube AS
     SELECT 
-        EXTRACT(YEAR FROM date) as Year,
-        -- חישוב סכום לכל חודש בנפרד
-        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 1 THEN unit_sales END) / 1000000, 2) as Jan_M,
-        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 2 THEN unit_sales END) / 1000000, 2) as Feb_M,
-        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 3 THEN unit_sales END) / 1000000, 2) as Mar_M,
-        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 4 THEN unit_sales END) / 1000000, 2) as Apr_M,
-        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 5 THEN unit_sales END) / 1000000, 2) as May_M,
-        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 6 THEN unit_sales END) / 1000000, 2) as Jun_M,
-        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 7 THEN unit_sales END) / 1000000, 2) as Jul_M,
-        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 8 THEN unit_sales END) / 1000000, 2) as Aug_M,
-        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 9 THEN unit_sales END) / 1000000, 2) as Sep_M,
-        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 10 THEN unit_sales END) / 1000000, 2) as Oct_M,
-        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 11 THEN unit_sales END) / 1000000, 2) as Nov_M,
-        ROUND(SUM(CASE WHEN EXTRACT(MONTH FROM date) = 12 THEN unit_sales END) / 1000000, 2) as Dec_M,
+        -- COALESCE is used because CUBE produces NULLs for the subtotals
+        COALESCE(s.state, 'Grand Total') as state,
+        COALESCE(s.city, 'All Cities') as city,
+        ROUND(SUM(t.unit_sales), 2) as total_sales,
 
-        ROUND(SUM(unit_sales) / 1000000, 2) as Total_Year_M
-    FROM train
-    GROUP BY Year
-    ORDER BY Year;
+        -- Tagging the level of aggregation for easier filtering in the dashboard
+        CASE 
+            WHEN s.state IS NULL AND s.city IS NULL THEN 'National Level'
+            WHEN s.state IS NOT NULL AND s.city IS NULL THEN 'State Level'
+            ELSE 'City Level'
+        END as aggregation_level
+
+    FROM train t
+    JOIN stores s ON t.store_nbr = s.store_nbr
+    GROUP BY CUBE(s.state, s.city)
+    ORDER BY total_sales DESC;
     """
 
-    df = duck_con.execute(query).fetchdf()
+    con.execute(query)
+    print("   >> Table 'gold.q7_geo_cube' created successfully.")
 
-    print("\nSales in Millions (M) per Month/Year:")
-    print("-" * 140)
+    # הצצה לנתונים
+    df = con.execute("SELECT * FROM gold.q7_geo_cube LIMIT 10").fetchdf()
     print(df.to_string(index=False))
-    print("-" * 140)
 
-
-def explore_oil_pivot(duck_con):
-    print("\n--- Exploratory Data Analysis: Oil Price Heatmap (Ordered) ---")
+def process_question_8_oil(con):
+    """
+    Q8: Macro-Economic Analysis (Oil vs Sales).
+    Merges external oil data with internal sales data to find correlations.
+    Aggregates by MONTH to smooth out daily volatility.
+    """
+    print("\nProcessing Question 8: Oil Price Impact...")
 
     query = """
-    WITH oil_prep AS (
+    CREATE OR REPLACE TABLE gold.q8_oil_sales AS
+    WITH monthly_sales AS (
         SELECT 
-            EXTRACT(YEAR FROM date) as Year,
-            EXTRACT(MONTH FROM date) as Month,
-            dcoilwtico
+            DATE_TRUNC('month', date) as m_date,
+            SUM(unit_sales) as total_sales
+        FROM train
+        GROUP BY 1
+    ),
+    monthly_oil AS (
+        SELECT 
+            DATE_TRUNC('month', date) as m_date,
+            AVG(dcoilwtico) as avg_oil_price
         FROM oil
+        GROUP BY 1
     )
-    PIVOT oil_prep
-    ON Month IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12) -- כאן הכפייה של הסדר!
-    USING ROUND(AVG(dcoilwtico), 1)
-    GROUP BY Year
-    ORDER BY Year;
+    SELECT 
+        s.m_date as month,
+        s.total_sales,
+        o.avg_oil_price
+    FROM monthly_sales s
+    JOIN monthly_oil o ON s.m_date = o.m_date
+    ORDER BY s.m_date;
     """
 
-    df = duck_con.execute(query).fetchdf()
-
-    print("\nOil Prices (Monthly Average) - Correctly Ordered:")
-    print("-" * 100)
+    con.execute(query)
+    print("   >> Table 'gold.q8_oil_sales' created successfully.")
+    df = con.execute("SELECT * FROM gold.q8_oil_sales LIMIT 10").fetchdf()
     print(df.to_string(index=False))
-    print("-" * 100)
-'''
 # =============================================
 
 def save_raw_samples(con):
@@ -640,8 +652,8 @@ if __name__ == "__main__":
         process_question_4(con)
         process_question_5_pivot(con)
         process_question_6(con)
-        #explore_data_trends(duck_con)
-        #explore_oil_pivot(duck_con)
+        process_question_7_cube(con)
+        process_question_8_oil(con)
         save_raw_samples(con)
         create_gold_inventory(con)
 
