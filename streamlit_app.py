@@ -639,10 +639,10 @@ def page_q7_cube():
     st.title("Q7: Geographic Hierarchy (CUBE) 🧊")
     explain_box(
         "Multi-Level Aggregation",
-        "Using the SQL **CUBE** function, we analyzed sales across different geographic levels simultaneously:\n"
-        "1. **National Level** (Grand Total)\n"
-        "2. **State Level** (Subtotals by Province)\n"
-        "3. **City Level** (Detailed Sales)\n\n"
+        "Using the SQL CUBE function, we analyzed sales across different geographic levels simultaneously:\n"
+        "1. National Level (Grand Total)\n"
+        "2. State Level (Subtotals by Province)\n"
+        "3. City Level (Detailed Sales)\n\n"
         "**What's on this page:** A hierarchical drill-down view of sales performance."
     )
 
@@ -656,7 +656,7 @@ def page_q7_cube():
     national_data = df[df["aggregation_level"] == "National Level"]
     if not national_data.empty:
         total_sales = national_data.iloc[0]["total_sales"]
-        st.metric("🇪🇨 National Total Sales", f"${total_sales:,.0f}")
+        st.metric("National Total Sales", f"${total_sales:,.0f}")
 
     st.divider()
 
@@ -721,7 +721,7 @@ def page_q8_oil():
     explain_box(
         "Economic Correlation",
         "Ecuador's economy is heavily dependent on oil exports. \n"
-        "This analysis investigates the correlation between **Global Oil Prices** and **Retail Sales**.\n\n"
+        "This analysis investigates the correlation between Global Oil Prices and Retail Sales.\n\n"
         "**What's on this page:** A dual-axis time series chart and a correlation coefficient score."
     )
 
@@ -781,9 +781,9 @@ def page_q8_oil():
     # Display detailed data table formatted nicely
     disp = rename_columns_for_display(df, MAP_Q8)
     styler = disp.style.format({
-        "Month": lambda x: x.strftime("%Y-%m"),  # הצגת תאריך בלי שעות
-        "Total Sales": "{:,.0f}",  # פסיק לאלפים
-        "Avg Oil Price ($)": "${:.2f}"  # סימן דולר
+        "Month": lambda x: x.strftime("%Y-%m"),
+        "Total Sales": "{:,.0f}",
+        "Avg Oil Price ($)": "${:.2f}"
     })
 
     st.dataframe(styler, use_container_width=True, height=400)
@@ -918,7 +918,7 @@ PAGES = {
     "Q4: Holiday Impact": page_q4_holidays,
     "Q5: Seasonality": page_q5_seasonality,
     "Q6: Growth (YoY)": page_q6_perishables,
-    "Q7: Geo Hierarchy (CUBE)": page_q7_cube,
+    "Q7: Geo Hierarchy": page_q7_cube,
     "Q8: Oil & Economy": page_q8_oil,
     "Feedback": page_feedback,
 
