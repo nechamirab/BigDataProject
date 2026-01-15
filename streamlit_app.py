@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 from wordcloud import WordCloud
+import plotly.express as px
 
 # ==============================
 # CONFIGURATION
@@ -180,39 +181,35 @@ def load_table(table_name):
     """Generic loader for raw sample tables."""
     return read_df(f"SELECT * FROM {table_name}")
 
-
 @st.cache_data(show_spinner=False)
 def load_q1():
     return read_df("SELECT * FROM q1_pareto_analysis ORDER BY total_sales DESC;")
 
-
 @st.cache_data(show_spinner=False)
 def load_q2():
-    return read_df("SELECT * FROM q2_top_products_city ORDER BY city, rank_in_city;")
-
+    return read_df("SELECT * FROM q2_perishable_growth;")
 
 @st.cache_data(show_spinner=False)
 def load_q3():
-    return read_df("SELECT * FROM q3_basket_size_analysis ORDER BY city_rank;")
+    return read_df("SELECT * FROM q3_top_products_city ORDER BY city, rank_in_city;")
 
 
 @st.cache_data(show_spinner=False)
 def load_q4():
-    return read_df("SELECT * FROM q4_holiday_impact ORDER BY local_holiday_rank;")
+    return read_df("SELECT * FROM q4_basket_size_analysis ORDER BY city_rank;")
 
 
 @st.cache_data(show_spinner=False)
 def load_q5():
-    return read_df("SELECT * FROM q5_sales_monthly_pivot ORDER BY year;")
-
+    return read_df("SELECT * FROM q5_holiday_impact ORDER BY local_holiday_rank;")
 
 @st.cache_data(show_spinner=False)
 def load_q6():
-    return read_df("SELECT * FROM q6_perishable_growth;")
+    return read_df("SELECT * FROM q6_geo_cube;")
 
 @st.cache_data(show_spinner=False)
 def load_q7():
-    return read_df("SELECT * FROM q7_geo_cube;")
+    return read_df("SELECT * FROM q7_sales_monthly_pivot ORDER BY year;")
 
 @st.cache_data(show_spinner=False)
 def load_q8():
@@ -234,27 +231,8 @@ MAP_Q1 = {
     "cumulative_pct": "Cumulative percentage",
     "pareto_group": "Pareto group",
 }
+
 MAP_Q2 = {
-    "city": "City",
-    "family": "Category",
-    "total_sold": "Total sold",
-    "rank_in_city": "Rank in city",
-}
-MAP_Q3 = {
-    "city": "City",
-    "total_items_sold": "Total items sold",
-    "total_transactions": "Total transactions",
-    "avg_basket_size": "Average basket size",
-    "city_rank": "City rank",
-}
-MAP_Q4 = {
-    "city": "City",
-    "national_holiday_avg": "National holiday average",
-    "local_holiday_avg": "Local holiday average",
-    "winner_type": "The winner",
-    "local_holiday_rank": "Local holiday rank",
-}
-MAP_Q6 = {
     "city": "City",
     "sales_year": "Year",
     "current_sales": "Current year sales",
@@ -262,7 +240,28 @@ MAP_Q6 = {
     "growth_pct": "percent growth",
 }
 
-MAP_Q7 = {
+MAP_Q3 = {
+    "city": "City",
+    "family": "Category",
+    "total_sold": "Total sold",
+    "rank_in_city": "Rank in city",
+}
+MAP_Q4 = {
+    "city": "City",
+    "total_items_sold": "Total items sold",
+    "total_transactions": "Total transactions",
+    "avg_basket_size": "Average basket size",
+    "city_rank": "City rank",
+}
+MAP_Q5 = {
+    "city": "City",
+    "national_holiday_avg": "National holiday average",
+    "local_holiday_avg": "Local holiday average",
+    "winner_type": "The winner",
+    "local_holiday_rank": "Local holiday rank",
+}
+
+MAP_Q6 = {
     "state": "State / Province",
     "city": "City",
     "total_sales": "Total Sales",
@@ -386,17 +385,71 @@ def page_q1_pareto():
         "A steep rise at the beginning indicates that a few products generate a large portion of the sales."
     )
 
-def page_q2_city_preferences():
-    st.title("Q2: Regional Preferences (Top-3) ⛰️")
+def page_q2_perishables():
+    st.title("Q2: Perishable Goods Growth (YoY) ♻️")
+    explain_box(
+        "Year-Over-Year (YoY) Growth",
+        "Which cities are showing the highest growth in the sales of perishable goods?\n\n"
+        "**What's on this page:** A bar chart showing the top 20 cities by growth percentage, and a comparison table."
+    )
+
+    df = load_q2()
+    if df is None or df.empty:
+        st.error("q2_perishable_growth does not exist/is empty in SQLite.")
+        return
+
+    avg_growth = df["growth_pct"].mean()
+    best_city_row = df.sort_values("growth_pct", ascending=False).iloc[0]
+
+    st.subheader("Key Performance Indicators")
+    k1, k2, k3 = st.columns(3)
+    k1.metric("Average Market Growth", f"{avg_growth:.1f}%")
+    k2.metric("Fastest Growing City", best_city_row["city"])
+    k3.metric("Highest Growth Rate", f"{best_city_row['growth_pct']:.1f}%")
+    st.divider()
+
+    cities = ["(All)"] + sorted(df["city"].dropna().unique().tolist())
+    selected_city = st.selectbox("Filter by City", cities)
+
+    filtered = df.copy()
+    if selected_city != "(All)":
+        filtered = filtered[filtered["city"] == selected_city]
+
+    st.subheader("YoY Growth Table")
+    disp = rename_columns_for_display(filtered, MAP_Q2)
+    styled_dataframe(disp, height=520)
+
+    st.subheader("Chart: Top 20 by Growth %")
+    plot_df = filtered.sort_values("growth_pct", ascending=False).head(10)
+    if plot_df.empty:
+        st.info("No data for chart based on current filter.")
+        return
+
+    safe_bar_chart(
+        x=plot_df["city"],
+        y=plot_df["growth_pct"],
+        title="Top 20 Growth Percentage (YoY)",
+        xlabel="City",
+        ylabel="Growth %"
+    )
+    st.markdown(
+        "**Chart Description:** A bar chart showing the **Top 20 Cities by YoY Growth %** "
+        "based on the current filter. A taller bar represents higher growth compared to the previous year. "
+        "This helps identify hotspots where the demand for perishable goods is rising rapidly."
+    )
+
+
+def page_q3_city_preferences():
+    st.title("Q3: Regional Preferences (Top-3) ⛰️")
     explain_box(
         "Localization Analysis",
         "What are the top 3 selling product categories in each city? This helps understand local consumer behavior.\n\n"
              "**What's on this page:** A city selector, a bar chart displaying the top 3 categories for the selected city, and a detailed table of rankings."
     )
 
-    df = load_q2()
+    df = load_q3()
     if df is None or df.empty:
-        st.error("q2_top_products_city does not exist/is empty in SQLite.")
+        st.error("q3_top_products_city does not exist/is empty in SQLite.")
         return
 
     cities = ["(All)"] + sorted(df["city"].dropna().unique().tolist())
@@ -407,7 +460,7 @@ def page_q2_city_preferences():
         filtered = filtered[filtered["city"] == selected_city]
 
     st.subheader(f"Top Categories in {selected_city}")
-    disp = rename_columns_for_display(filtered, MAP_Q2)
+    disp = rename_columns_for_display(filtered, MAP_Q3)
     styled_dataframe(disp, height=520)
 
     if selected_city != "(All)" and not filtered.empty:
@@ -453,17 +506,17 @@ def page_q2_city_preferences():
         st.info("Not enough data to generate Word Cloud.")
 
 
-def page_q3_basket_size():
-    st.title("Q3: Average Basket Size 🛒")
+def page_q4_basket_size():
+    st.title("Q4: Average Basket Size 🛒")
     explain_box(
         "Store Efficiency",
         "Which cities have the largest average basket size (items per transaction)?\n\n"
         "**What's on this page:** A slider to choose the number of top cities, a bar chart comparing basket sizes, and a ranked table."
     )
 
-    df = load_q3()
+    df = load_q4()
     if df is None or df.empty:
-        st.error("q3_basket_size_analysis does not exist/is empty in SQLite.")
+        st.error("q4_basket_size_analysis does not exist/is empty in SQLite.")
         return
 
     max_n = max(5, min(22, len(df)))
@@ -472,7 +525,7 @@ def page_q3_basket_size():
     top_df = df.head(top_n).copy()
 
     st.subheader(f"Top {top_n} Cities by Basket Size")
-    disp = rename_columns_for_display(top_df, MAP_Q3)
+    disp = rename_columns_for_display(top_df, MAP_Q4)
     styled_dataframe(disp)
 
     st.subheader("Chart: Basket Size by City (Top-N)")
@@ -491,17 +544,17 @@ def page_q3_basket_size():
     )
 
 
-def page_q4_holidays():
-    st.title("Q4: Local vs. National Holidays 🎊")
+def page_q5_holidays():
+    st.title("Q5: Local vs. National Holidays 🎊")
     explain_box(
         "Holiday Impact Analysis",
         "Do local holidays generate more sales than national holidays in specific cities?\n\n"
         "**What's on this page:** A scatter plot where each point represents a city, and a comparison table. Points above the diagonal line indicate stronger Local holidays."
     )
 
-    df = load_q4()
+    df = load_q5()
     if df is None or df.empty:
-        st.error("q4_holiday_impact does not exist/is empty in SQLite.")
+        st.error("q5_holiday_impact does not exist/is empty in SQLite.")
         return
 
     choice = st.radio("Filter by Winner", ["All", "Local", "National"], horizontal=True)
@@ -513,130 +566,47 @@ def page_q4_holidays():
         filtered = filtered[filtered["winner_type"] == "National"]
 
     st.subheader("Holiday Impact Table")
-    disp = rename_columns_for_display(filtered, MAP_Q4)
+    disp = rename_columns_for_display(filtered, MAP_Q5)
     styled_dataframe(disp, height=520)
 
     st.subheader("Chart: Local vs National (Scatter)")
 
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.scatterplot(
-        data=filtered,
+    fig = px.scatter(
+        filtered,
         x='national_holiday_avg',
         y='local_holiday_avg',
-        hue='winner_type',
-        style='winner_type',
-        s=100,
-        ax=ax
+        color='winner_type',
+        hover_name='city',
+        size='local_holiday_avg',
+        title="Local vs National Sales (Hover for details)",
+        labels={
+            "national_holiday_avg": "National Holiday Sales",
+            "local_holiday_avg": "Local Holiday Sales",
+            "winner_type": "Winner"
+        },
+        template="plotly_white"
     )
 
-    lims = [
-        np.min([ax.get_xlim(), ax.get_ylim()]),
-        np.max([ax.get_xlim(), ax.get_ylim()]),
-    ]
-    ax.plot(lims, lims, 'r--', alpha=0.5, zorder=0)
-    ax.set_title("Local vs National Holiday Impact", fontsize=16)
-    ax.set_xlabel("National Holiday Avg Sales", fontsize=12)
-    ax.set_ylabel("Local Holiday Avg Sales", fontsize=12)
-    st.pyplot(fig)
+    min_val = min(filtered['national_holiday_avg'].min(), filtered['local_holiday_avg'].min())
+    max_val = max(filtered['national_holiday_avg'].max(), filtered['local_holiday_avg'].max())
+
+    fig.add_shape(
+        type="line", line=dict(dash="dash", color="gray", width=1),
+        x0=min_val, y0=min_val, x1=max_val, y1=max_val
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
     st.markdown(
         "**Chart Description:** Each point represents a city. The X-axis is **Average National Holiday Sales**, "
         "and the Y-axis is **Average Local Holiday Sales**. "
         "Points appearing *above the diagonal line* (Y>X) indicate that Local holidays generate more sales in that city."
     )
-
-
-def page_q5_seasonality():
-    st.title("Q5: Seasonality (Pivot) 📈")
-    explain_box(
-        "Monthly Sales Trends",
-        "This page analyzes sales trends over time, aggregated by month and year, to identify seasonal peaks.\n\n"
-        "**What's on this page:** A filter for years, a line chart showing monthly sales, and a Pivot table."
-    )
-
-    df = load_q5()
-    if df is None or df.empty:
-        st.error("q5_sales_monthly_pivot does not exist/is empty in SQLite.")
-        return
-
-    years = sorted(df["year"].dropna().unique().tolist())
-    selected_years = st.multiselect("Select Years", years, default=years)
-    filtered = df[df["year"].isin(selected_years)].copy()
-
-    st.subheader("Pivot Table (Year × Month)")
-    styled_dataframe(filtered, height=380)
-
-    st.subheader("Chart: Monthly Average (selected years)")
-    month_cols = [c for c in filtered.columns if str(c) in [str(i) for i in range(1, 13)]]
-    if not month_cols:
-        st.info("No month columns (1..12) found in table q5_sales_monthly_pivot.")
-        return
-
-    avg_series = filtered[month_cols].mean(numeric_only=True)
-    avg_series.index = [int(str(x)) for x in avg_series.index]
-    avg_series = avg_series.sort_index()
-
-    safe_line_chart(
-        x=avg_series.index,
-        y=avg_series.values,
-        title="Seasonality: Monthly Average Sales",
-        xlabel="Month",
-        ylabel="Average Sales"
-    )
-    st.markdown(
-        "**Chart Description:** A line chart showing the **Average Sales per Month** (1–12) across the selected years. "
-        "Peaks or troughs indicate seasonality — specific months that consistently see higher or lower sales."
-    )
-
-
-def page_q6_perishables():
-    st.title("Q6: Perishable Goods Growth (YoY) ♻️")
-    explain_box(
-        "Year-Over-Year (YoY) Growth",
-        "Which cities are showing the highest growth in the sales of perishable goods?\n\n"
-        "**What's on this page:** A bar chart showing the top 20 cities by growth percentage, and a comparison table."
-    )
-
-    df = load_q6()
-    if df is None or df.empty:
-        st.error("q6_perishable_growth does not exist/is empty in SQLite.")
-        return
-
-    cities = ["(All)"] + sorted(df["city"].dropna().unique().tolist())
-    selected_city = st.selectbox("Filter by City", cities)
-
-    filtered = df.copy()
-    if selected_city != "(All)":
-        filtered = filtered[filtered["city"] == selected_city]
-
-    st.subheader("YoY Growth Table")
-    disp = rename_columns_for_display(filtered, MAP_Q6)
-    styled_dataframe(disp, height=520)
-
-    st.subheader("Chart: Top 20 by Growth %")
-    plot_df = filtered.sort_values("growth_pct", ascending=False).head(10)
-    if plot_df.empty:
-        st.info("No data for chart based on current filter.")
-        return
-
-    safe_bar_chart(
-        x=plot_df["city"],
-        y=plot_df["growth_pct"],
-        title="Top 20 Growth Percentage (YoY)",
-        xlabel="City",
-        ylabel="Growth %"
-    )
-    st.markdown(
-        "**Chart Description:** A bar chart showing the **Top 20 Cities by YoY Growth %** "
-        "based on the current filter. A taller bar represents higher growth compared to the previous year. "
-        "This helps identify hotspots where the demand for perishable goods is rising rapidly."
-    )
-
-
-def page_q7_cube():
+def page_q6_cube():
     """
     Renders the 'Geographic Hierarchy' page based on the SQL CUBE aggregation.
     """
-    st.title("Q7: Geographic Hierarchy (CUBE) 🧊")
+    st.title("Q6: Geographic Hierarchy (CUBE) 🧊")
     explain_box(
         "Multi-Level Aggregation",
         "Using the SQL CUBE function, we analyzed sales across different geographic levels simultaneously:\n"
@@ -646,9 +616,9 @@ def page_q7_cube():
         "**What's on this page:** A hierarchical drill-down view of sales performance."
     )
 
-    df = load_q7()
+    df = load_q6()
     if df is None or df.empty:
-        st.error("q7_geo_cube does not exist in SQLite.")
+        st.error("q6_geo_cube does not exist in SQLite.")
         return
 
     # --- National KPI ---
@@ -679,7 +649,7 @@ def page_q7_cube():
             "Top 10 States by Sales", "State", "Sales", rotate_xticks=True
         )
 
-        disp = rename_columns_for_display(filtered, MAP_Q7)
+        disp = rename_columns_for_display(filtered, MAP_Q6)
         styled_dataframe(disp, height=400)
 
     elif view_mode == "City Details":
@@ -702,11 +672,52 @@ def page_q7_cube():
                 filtered["total_sales"],
                 f"Sales by City in {selected_state}", "City", "Sales", rotate_xticks=True
             )
-            disp = rename_columns_for_display(filtered, MAP_Q7)
+            disp = rename_columns_for_display(filtered, MAP_Q6)
             styled_dataframe(disp)
         else:
             st.warning("No city data found for this state.")
 
+def page_q7_seasonality():
+    st.title("Q7: Seasonality (Pivot) 📈")
+    explain_box(
+        "Monthly Sales Trends",
+        "This page analyzes sales trends over time, aggregated by month and year, to identify seasonal peaks.\n\n"
+        "**What's on this page:** A filter for years, a line chart showing monthly sales, and a Pivot table."
+    )
+
+    df = load_q7()
+    if df is None or df.empty:
+        st.error("q7_sales_monthly_pivot does not exist/is empty in SQLite.")
+        return
+
+    years = sorted(df["year"].dropna().unique().tolist())
+    selected_years = st.multiselect("Select Years", years, default=years)
+    filtered = df[df["year"].isin(selected_years)].copy()
+
+    st.subheader("Pivot Table (Year × Month)")
+    styled_dataframe(filtered, height=380)
+
+    st.subheader("Chart: Monthly Average (selected years)")
+    month_cols = [c for c in filtered.columns if str(c) in [str(i) for i in range(1, 13)]]
+    if not month_cols:
+        st.info("No month columns (1..12) found in table q7_sales_monthly_pivot.")
+        return
+
+    avg_series = filtered[month_cols].mean(numeric_only=True)
+    avg_series.index = [int(str(x)) for x in avg_series.index]
+    avg_series = avg_series.sort_index()
+
+    safe_line_chart(
+        x=avg_series.index,
+        y=avg_series.values,
+        title="Seasonality: Monthly Average Sales",
+        xlabel="Month",
+        ylabel="Average Sales"
+    )
+    st.markdown(
+        "**Chart Description:** A line chart showing the **Average Sales per Month** (1–12) across the selected years. "
+        "Peaks or troughs indicate seasonality — specific months that consistently see higher or lower sales."
+    )
 
 def page_q8_oil():
     """
@@ -806,15 +817,18 @@ def page_feedback():
     st.subheader("Add New Feedback")
     with st.form("feedback_form", clear_on_submit=True):
         user_name = st.text_input("Name (Optional)")
+
         page = st.selectbox("Which page are you reviewing?", [
             "Overview",
             "Raw Data Samples",
             "Q1: Pareto (80/20)",
-            "Q2: City Preferences",
-            "Q3: Basket Size",
-            "Q4: Holiday Impact",
-            "Q5: Seasonality",
-            "Q6: Growth (YoY)",
+            "Q2: Growth (YoY)",
+            "Q3: City Preferences",
+            "Q4: Basket Size",
+            "Q5: Holiday Impact",
+            "Q6: Geo Hierarchy",
+            "Q7: Seasonality",
+            "Q8: Oil & Economy",
             "General"
         ])
         rating = st.radio("Rating (1-5)", [1, 2, 3, 4, 5], index=4, horizontal=True)
@@ -909,21 +923,28 @@ def page_feedback():
 # ==============================
 # NAV (Hebrew)
 # ==============================
+
 PAGES = {
     "Overview": page_overview,
     "Raw Data Samples": page_raw_data,
+
+    # --- Product & Inventory ---
     "Q1: Pareto (80/20)": page_q1_pareto,
-    "Q2: City Preferences": page_q2_city_preferences,
-    "Q3: Basket Size": page_q3_basket_size,
-    "Q4: Holiday Impact": page_q4_holidays,
-    "Q5: Seasonality": page_q5_seasonality,
-    "Q6: Growth (YoY)": page_q6_perishables,
-    "Q7: Geo Hierarchy": page_q7_cube,
+    "Q2: Growth (YoY)": page_q2_perishables,
+
+    # --- Geo & Local Analysis ---
+    "Q3: City Preferences": page_q3_city_preferences,
+    "Q4: Basket Size": page_q4_basket_size,
+    "Q5: Holiday Impact": page_q5_holidays,
+    "Q6: Geo Hierarchy": page_q6_cube,
+
+    # --- Macro & Seasonality ---
+    "Q7: Seasonality": page_q7_seasonality,
     "Q8: Oil & Economy": page_q8_oil,
+
     "Feedback": page_feedback,
-
-
 }
+
 
 st.sidebar.title("Navigation")
 st.sidebar.caption("Dashboard reads from SQLite only (dashboard_gold.db).")

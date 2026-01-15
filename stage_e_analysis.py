@@ -114,11 +114,88 @@ def process_question_1(con):
         print("   (Flatter distribution than typical Pareto)")
 
 # ==============================================================================
-# QUESTION 2: Regional Preferences (Top-3 Products per City)
+# QUESTION 2: Perishable Goods Growth (Year-Over-Year)
 # ==============================================================================
 def process_question_2(con):
     """
-        Q2: Identify top selling product families per city (Localization).
+    Q2: Identify top stores for Perishable Goods and calculate Year-Over-Year (YoY) growth.
+
+    Business Question: Which stores handle the most perishable inventory,
+    and are they growing or shrinking? (Critical for cold-chain logistics).
+
+    Logic:
+    1. Filter for Perishable items only (items.perishable = 1).
+    2. Aggregate sales by Store and Year.
+    3. Use WINDOW FUNCTION (LAG) to fetch the previous year's sales.
+    4. Calculate Growth %: ((Current - Previous) / Previous) * 100.
+    """
+    print("\nProcessing Question 2: Perishable Goods Growth Analysis...")
+
+    query = """
+    CREATE OR REPLACE TABLE gold.q2_perishable_growth AS
+    WITH annual_perishable_sales AS (
+        -- Step 1: Filter & Aggregate
+        -- Get total perishable sales for each store per year
+        SELECT 
+            s.store_nbr,
+            s.city,
+            EXTRACT(YEAR FROM t.date) as sales_year,
+            SUM(t.unit_sales) as total_perishable_sales
+        FROM train t
+        JOIN items i ON t.item_nbr = i.item_nbr
+        JOIN stores s ON t.store_nbr = s.store_nbr
+        WHERE i.perishable = 1  -- Only perishable goods
+        GROUP BY s.store_nbr, s.city, sales_year
+    ),
+    growth_calculation AS (
+        -- Step 2: Calculate YoY Growth using LAG
+        SELECT 
+            store_nbr,
+            city,
+            sales_year,
+            total_perishable_sales,
+
+            -- LAG function: Look back 1 row (within the same store) to get previous year sales
+            LAG(total_perishable_sales) OVER (
+                PARTITION BY store_nbr 
+                ORDER BY sales_year
+            ) as prev_year_sales
+
+        FROM annual_perishable_sales
+    )
+    -- Step 3: Final Calculation & Filtering
+    SELECT 
+        city,
+        sales_year,
+        ROUND(total_perishable_sales, 0) as current_sales,
+        ROUND(prev_year_sales, 0) as previous_sales,
+
+        -- Calculate Percentage Growth
+        ROUND(
+            ((total_perishable_sales - prev_year_sales) / prev_year_sales) * 100, 
+        2) as growth_pct
+
+    FROM growth_calculation
+    WHERE 
+        sales_year = 2016
+        AND prev_year_sales IS NOT NULL -- Remove first year (no previous data)
+    ORDER BY total_perishable_sales DESC -- Show biggest stores first
+    LIMIT 20; -- Top 20 stores
+    """
+
+    con.execute(query)
+    print("   >> Table 'gold.q2_perishable_growth' created successfully.")
+
+    print("   >> Top 20 Growth Stores:")
+    df_sample = con.execute("SELECT * FROM gold.q2_perishable_growth LIMIT 10").fetchdf()
+    print(df_sample.to_string(index=False))
+
+# ==============================================================================
+# QUESTION 3: Regional Preferences (Top-3 Products per City)
+# ==============================================================================
+def process_question_3(con):
+    """
+        Q3: Identify top selling product families per city (Localization).
 
         Business Question: How do consumer preferences vary between cities?
         Logic: Rank product families by sales within each city partition.
@@ -128,10 +205,10 @@ def process_question_2(con):
         after the window function, without needing a subquery.
         We return the data in 'Long Format' (3 rows per city).
         """
-    print("\nProcessing Question 2: Regional Preferences (Top 3)...")
+    print("\nProcessing Question 3: Regional Preferences (Top 3)...")
 
     query = """
-    CREATE OR REPLACE TABLE gold.q2_top_products_city AS
+    CREATE OR REPLACE TABLE gold.q3_top_products_city AS
     SELECT 
         s.city,
         i.family,
@@ -149,19 +226,20 @@ def process_question_2(con):
     """
 
     con.execute(query)
-    print("   >> Table 'gold.q2_top_products_city' created successfully.")
+    print("   >> Table 'gold.q3_top_products_city' created successfully.")
 
     # Print Sample
     print("   >> Top 3 Preferences (Sample):")
-    df_sample = con.execute("SELECT * FROM gold.q2_top_products_city LIMIT 6").fetchdf()
+    df_sample = con.execute("SELECT * FROM gold.q3_top_products_city LIMIT 6").fetchdf()
     print(df_sample.to_string(index=False))
 
+
 # ==============================================================================
-# QUESTION 3: Basket Size Analysis
+# QUESTION 4: Basket Size Analysis
 # ==============================================================================
-def process_question_3(con):
+def process_question_4(con):
     """
-    Q3: Analyze 'Basket Size' efficiency per city.
+    Q4: Analyze 'Basket Size' efficiency per city.
 
     Business Question: Which cities have the largest average transaction size?
     Logic: (Total Items Sold) / (Total Transactions).
@@ -171,10 +249,10 @@ def process_question_3(con):
     BEFORE joining with transactions. This prevents 'Fan-out' (duplication)
     of the transaction counts, which would lead to incorrect averages.
     """
-    print("\nProcessing Question 3: Basket Size Analysis by City...")
+    print("\nProcessing Question 4: Basket Size Analysis by City...")
 
     query = """
-    CREATE OR REPLACE TABLE gold.q3_basket_size_analysis AS
+    CREATE OR REPLACE TABLE gold.q4_basket_size_analysis AS
     WITH daily_sales_agg AS (
         -- Step 1: Pre-aggregate items sold per store per day.
         -- This collapses the 'train' table (millions of rows) into one row per store/date.
@@ -215,26 +293,26 @@ def process_question_3(con):
     """
 
     con.execute(query)
-    print("   >> Table 'gold.q3_basket_size_analysis' created successfully.")
+    print("   >> Table 'gold.q4_basket_size_analysis' created successfully.")
 
     # Print Sample
     print("   >> Top 5 Cities by Basket Size:")
-    df_sample = con.execute("SELECT * FROM gold.q3_basket_size_analysis LIMIT 5").fetchdf()
+    df_sample = con.execute("SELECT * FROM gold.q4_basket_size_analysis LIMIT 5").fetchdf()
     print(df_sample.to_string(index=False))
 
 # ==============================================================================
-# QUESTION 4: Local vs. National Holidays Impact
+# QUESTION 5: Local vs. National Holidays Impact
 # ==============================================================================
-def process_question_4(con):
+def process_question_5(con):
     """
-    Q4: Analyze the impact of 'Local' vs 'National' holidays.
+    Q5: Analyze the impact of 'Local' vs 'National' holidays.
     UPDATED: Now includes a 'winner_type' column to explicitly show
     which holiday type generates more sales.
     """
-    print("\nProcessing Question 4: Local vs. National Holidays...")
+    print("\nProcessing Question 5: Local vs. National Holidays...")
 
     query = """
-    CREATE OR REPLACE TABLE gold.q4_holiday_impact AS
+    CREATE OR REPLACE TABLE gold.q5_holiday_impact AS
     WITH city_daily_sales AS (
         -- Step 1: Sales per City per Date
         SELECT 
@@ -289,129 +367,23 @@ def process_question_4(con):
     """
 
     con.execute(query)
-    print("   >> Table 'gold.q4_holiday_impact' created successfully.")
+    print("   >> Table 'gold.q5_holiday_impact' created successfully.")
 
     print("   >> Holiday Impact Sample:")
-    df_sample = con.execute("SELECT * FROM gold.q4_holiday_impact LIMIT 5").fetchdf()
-    print(df_sample.to_string(index=False))
-
-def process_question_5_pivot(con):
-    """
-    Q5: Seasonality (PIVOT) - monthly total sales per year.
-    Business Question: Is there seasonality? Which months are strongest each year?
-    Requirement: Uses DuckDB PIVOT and saves the output into SQLite (gold).
-    """
-    print("\nProcessing Question 5: Seasonality Pivot (Monthly Sales by Year)...")
-
-    query = """
-    CREATE OR REPLACE TABLE gold.q5_sales_monthly_pivot AS
-    WITH sales_prep AS (
-        SELECT
-            EXTRACT(YEAR FROM date) AS year,
-            EXTRACT(MONTH FROM date) AS month,
-            unit_sales
-        FROM train
-    )
-    PIVOT sales_prep
-    ON month IN (1,2,3,4,5,6,7,8,9,10,11,12)
-    USING ROUND(SUM(unit_sales), 2)
-    GROUP BY year
-    ORDER BY year;
-    """
-    con.execute(query)
-    print("   >> Table 'gold.q5_sales_monthly_pivot' created successfully.")
-
-    df_sample = con.execute("SELECT * FROM gold.q5_sales_monthly_pivot LIMIT 5").fetchdf()
-    print(df_sample.to_string(index=False))
-
-# ==============================================================================
-# QUESTION 6: Perishable Goods Growth (Year-Over-Year)
-# ==============================================================================
-def process_question_6(con):
-    """
-    Q6: Identify top stores for Perishable Goods and calculate Year-Over-Year (YoY) growth.
-
-    Business Question: Which stores handle the most perishable inventory,
-    and are they growing or shrinking? (Critical for cold-chain logistics).
-
-    Logic:
-    1. Filter for Perishable items only (items.perishable = 1).
-    2. Aggregate sales by Store and Year.
-    3. Use WINDOW FUNCTION (LAG) to fetch the previous year's sales.
-    4. Calculate Growth %: ((Current - Previous) / Previous) * 100.
-    """
-    print("\nProcessing Question 6: Perishable Goods Growth Analysis...")
-
-    query = """
-    CREATE OR REPLACE TABLE gold.q6_perishable_growth AS
-    WITH annual_perishable_sales AS (
-        -- Step 1: Filter & Aggregate
-        -- Get total perishable sales for each store per year
-        SELECT 
-            s.store_nbr,
-            s.city,
-            EXTRACT(YEAR FROM t.date) as sales_year,
-            SUM(t.unit_sales) as total_perishable_sales
-        FROM train t
-        JOIN items i ON t.item_nbr = i.item_nbr
-        JOIN stores s ON t.store_nbr = s.store_nbr
-        WHERE i.perishable = 1  -- Only perishable goods
-        GROUP BY s.store_nbr, s.city, sales_year
-    ),
-    growth_calculation AS (
-        -- Step 2: Calculate YoY Growth using LAG
-        SELECT 
-            store_nbr,
-            city,
-            sales_year,
-            total_perishable_sales,
-
-            -- LAG function: Look back 1 row (within the same store) to get previous year sales
-            LAG(total_perishable_sales) OVER (
-                PARTITION BY store_nbr 
-                ORDER BY sales_year
-            ) as prev_year_sales
-
-        FROM annual_perishable_sales
-    )
-    -- Step 3: Final Calculation & Filtering
-    SELECT 
-        city,
-        sales_year,
-        ROUND(total_perishable_sales, 0) as current_sales,
-        ROUND(prev_year_sales, 0) as previous_sales,
-
-        -- Calculate Percentage Growth
-        ROUND(
-            ((total_perishable_sales - prev_year_sales) / prev_year_sales) * 100, 
-        2) as growth_pct
-
-    FROM growth_calculation
-    WHERE 
-        sales_year = 2016
-        AND prev_year_sales IS NOT NULL -- Remove first year (no previous data)
-    ORDER BY total_perishable_sales DESC -- Show biggest stores first
-    LIMIT 20; -- Top 20 stores
-    """
-
-    con.execute(query)
-    print("   >> Table 'gold.q6_perishable_growth' created successfully.")
-
-    print("   >> Top 20 Growth Stores:")
-    df_sample = con.execute("SELECT * FROM gold.q6_perishable_growth LIMIT 10").fetchdf()
+    df_sample = con.execute("SELECT * FROM gold.q5_holiday_impact LIMIT 5").fetchdf()
     print(df_sample.to_string(index=False))
 
 
-def process_question_7_cube(con):
+def process_question_6_cube(con):
     """
-    Q7: Geographic Hierarchy using CUBE.
+    Q6: Geographic Hierarchy using CUBE.
     Analyzes sales at multiple levels: National -> State -> City.
     CUBE generates subtotals for all combinations.
     """
-    print("\nProcessing Question 7: Geographic Hierarchy (CUBE)...")
+    print("\nProcessing Question 6: Geographic Hierarchy (CUBE)...")
 
     query = """
-    CREATE OR REPLACE TABLE gold.q7_geo_cube AS
+    CREATE OR REPLACE TABLE gold.q6_geo_cube AS
     SELECT 
         -- COALESCE is used because CUBE produces NULLs for the subtotals
         COALESCE(s.state, 'Grand Total') as state,
@@ -432,11 +404,41 @@ def process_question_7_cube(con):
     """
 
     con.execute(query)
-    print("   >> Table 'gold.q7_geo_cube' created successfully.")
+    print("   >> Table 'gold.q6_geo_cube' created successfully.")
 
-    # הצצה לנתונים
-    df = con.execute("SELECT * FROM gold.q7_geo_cube LIMIT 10").fetchdf()
+    df = con.execute("SELECT * FROM gold.q6_geo_cube LIMIT 10").fetchdf()
     print(df.to_string(index=False))
+
+
+def process_question_7_pivot(con):
+    """
+    Q7: Seasonality (PIVOT) - monthly total sales per year.
+    Business Question: Is there seasonality? Which months are strongest each year?
+    Requirement: Uses DuckDB PIVOT and saves the output into SQLite (gold).
+    """
+    print("\nProcessing Question 7: Seasonality Pivot (Monthly Sales by Year)...")
+
+    query = """
+    CREATE OR REPLACE TABLE gold.q7_sales_monthly_pivot AS
+    WITH sales_prep AS (
+        SELECT
+            EXTRACT(YEAR FROM date) AS year,
+            EXTRACT(MONTH FROM date) AS month,
+            unit_sales
+        FROM train
+    )
+    PIVOT sales_prep
+    ON month IN (1,2,3,4,5,6,7,8,9,10,11,12)
+    USING ROUND(SUM(unit_sales), 2)
+    GROUP BY year
+    ORDER BY year;
+    """
+    con.execute(query)
+    print("   >> Table 'gold.q7_sales_monthly_pivot' created successfully.")
+
+    df_sample = con.execute("SELECT * FROM gold.q7_sales_monthly_pivot LIMIT 5").fetchdf()
+    print(df_sample.to_string(index=False))
+
 
 def process_question_8_oil(con):
     """
@@ -485,7 +487,7 @@ def save_raw_samples(con):
     for tbl in tables_to_sample:
         con.execute(f"""
                     CREATE OR REPLACE TABLE gold.sample_{tbl} AS 
-                    SELECT * FROM {tbl} USING SAMPLE 150
+                    SELECT * FROM {tbl} USING SAMPLE 300
                 """)
         print(f"   >> Created 'gold.sample_{tbl}' successfully.")
 
@@ -650,9 +652,9 @@ if __name__ == "__main__":
         process_question_2(con)
         process_question_3(con)
         process_question_4(con)
-        process_question_5_pivot(con)
-        process_question_6(con)
-        process_question_7_cube(con)
+        process_question_5(con)
+        process_question_6_cube(con)
+        process_question_7_pivot(con)
         process_question_8_oil(con)
         save_raw_samples(con)
         create_gold_inventory(con)
