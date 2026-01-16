@@ -477,9 +477,14 @@ def process_question_8_oil(con):
     print("   >> Table 'gold.q8_oil_sales' created successfully.")
     df = con.execute("SELECT * FROM gold.q8_oil_sales LIMIT 10").fetchdf()
     print(df.to_string(index=False))
-# =============================================
+
 
 def save_raw_samples(con):
+    """
+        Creates small sample tables (300 rows) from the large raw tables.
+        These samples are saved to the SQLite DB to allow users to view
+        raw data structures in the Dashboard without loading gigabytes of data.
+        """
     print("\n--- Saving Raw Samples to SQLite ---")
 
     tables_to_sample = ['train', 'items', 'stores', 'transactions', 'oil', 'holidays_events']
@@ -500,19 +505,21 @@ def vacuum_sqlite_database():
     """
     print("\n--- Final Step: Optimizing SQLite File Size (VACUUM) ---")
 
-    # אנחנו מתחברים ישירות לקובץ ה-SQLite לרגע אחד כדי לנקות אותו
+    # Connect directly to the SQLite file momentarily to clean it
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
-
-        # הרצת פקודת הניקיון
+        # Run the cleanup command
         conn.execute("VACUUM;")
-
         conn.close()
         print("   >> VACUUM completed successfully. File is clean and compact.")
     except Exception as e:
         print(f"   >> Warning: Could not run VACUUM: {e}")
 
 def verify_sqlite_tables_direct():
+    """
+    Performs a sanity check by listing all tables currently residing
+    in the physical SQLite file.
+    """
     print("\n--- Direct SQLite Verification ---")
     conn = sqlite3.connect(SQLITE_DB_PATH)
     rows = conn.execute("""
@@ -531,14 +538,8 @@ def verify_sqlite_tables_direct():
 
 def print_gold_catalog(con, preview_rows: int = 5):
     """
-    Prints all user-created GOLD tables in the attached SQLite DB, with:
-    - row count
-    - column count
-    - preview rows
-
-    Notes:
-    - In your environment, DuckDB suggests "main.sqlite_master" (not gold.main.sqlite_master).
-    - We skip system/metadata tables (sqlite_*, ducklake_*, __*).
+    Prints a catalog of all user-created GOLD tables in the attached SQLite DB,
+    including row counts, column counts, and a data preview.
     """
     print("\n" + "=" * 70)
     print("--- GOLD (SQLite) CATALOG ---")
@@ -594,8 +595,9 @@ def print_gold_catalog(con, preview_rows: int = 5):
 
 def create_gold_inventory(con):
     """
-    Creates a GOLD inventory table in SQLite:
-    table_name | row_count | col_count
+    Creates a metadata table 'gold_inventory' in SQLite.
+    This table stores the name, row count, and column count of every other table.
+    The Dashboard uses this table to dynamically display the 'Table Inventory' on the Overview page.
     """
     print("\n--- Creating GOLD inventory table ---")
 

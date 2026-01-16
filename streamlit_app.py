@@ -78,12 +78,11 @@ def ensure_feedback_table():
         """
     )
 
-
 # ==============================
 # UI HELPERS
 # ==============================
 def explain_box(title: str, text: str):
-    """Top-of-page explanation box (Hebrew)."""
+    """Top-of-page explanation box."""
     st.markdown(
         f"""
         <div style="
@@ -127,7 +126,7 @@ def rename_columns_for_display(df: pd.DataFrame, mapping: dict) -> pd.DataFrame:
 # PLOTTING FUNCTIONS (Original)
 # ==============================
 def safe_bar_chart(x, y, title, xlabel, ylabel, rotate_xticks=False):
-    """Plot with English-only labels to avoid RTL issues."""
+    """Generates a Matplotlib bar chart and renders it in Streamlit."""
     fig = plt.figure(figsize=(10, 5))
     plt.bar(x, y, color='pink')
     plt.title(title, fontsize=14)
@@ -140,7 +139,7 @@ def safe_bar_chart(x, y, title, xlabel, ylabel, rotate_xticks=False):
 
 
 def safe_line_chart(x, y, title, xlabel, ylabel):
-    """Plot with English-only labels to avoid RTL issues."""
+    """Generates a Matplotlib line chart and renders it in Streamlit."""
     fig = plt.figure(figsize=(10, 5))
     plt.plot(x, y, marker='o', linestyle='-', color='purple')
     plt.title(title, fontsize=14)
@@ -151,7 +150,7 @@ def safe_line_chart(x, y, title, xlabel, ylabel):
 
 
 def safe_scatter(x, y, title, xlabel, ylabel):
-    """Plot with English-only labels to avoid RTL issues."""
+    """Generates a Matplotlib scatter plot with a diagonal reference line."""
     fig = plt.figure(figsize=(8, 6))
     plt.scatter(x, y, alpha=0.7)
 
@@ -175,7 +174,6 @@ def safe_scatter(x, y, title, xlabel, ylabel):
 def load_inventory():
     return read_df("SELECT * FROM gold_inventory ORDER BY table_name;")
 
-
 @st.cache_data(show_spinner=False)
 def load_table(table_name):
     """Generic loader for raw sample tables."""
@@ -193,11 +191,9 @@ def load_q2():
 def load_q3():
     return read_df("SELECT * FROM q3_top_products_city ORDER BY city, rank_in_city;")
 
-
 @st.cache_data(show_spinner=False)
 def load_q4():
     return read_df("SELECT * FROM q4_basket_size_analysis ORDER BY city_rank;")
-
 
 @st.cache_data(show_spinner=False)
 def load_q5():
@@ -278,6 +274,10 @@ MAP_Q8 = {
 # PAGES
 # ==============================
 def page_overview():
+    """
+    Renders the Overview page.
+    Displays a summary of the project data, including the number of tables and total row counts.
+    """
     st.title("Overview 👀")
     explain_box(
         "About the Dashboard",
@@ -310,7 +310,8 @@ def page_overview():
 
 def page_raw_data():
     """
-    NEW PAGE: Displays raw data samples (required by assignment).
+    Renders the Raw Data page.
+    Allows the user to select and preview sample data from the source tables.
     """
     st.title("Raw data (samples) 📚")
     explain_box("Data Exploration",
@@ -338,6 +339,10 @@ def page_raw_data():
 
 
 def page_q1_pareto():
+    """
+    Renders the Q1: Pareto Analysis page.
+    Visualizes the 80/20 rule to identify core revenue products.
+    """
     st.title("Q1: Pareto Analysis (80/20) 💰")
     explain_box(
         "Inventory Efficiency",
@@ -386,6 +391,10 @@ def page_q1_pareto():
     )
 
 def page_q2_perishables():
+    """
+    Renders the Q2: Perishable Goods Growth page.
+    Analyzes Year-Over-Year (YoY) growth for perishable items across cities.
+    """
     st.title("Q2: Perishable Goods Growth (YoY) ♻️")
     explain_box(
         "Year-Over-Year (YoY) Growth",
@@ -440,6 +449,10 @@ def page_q2_perishables():
 
 
 def page_q3_city_preferences():
+    """
+    Renders the Q3: Regional Preferences page.
+    Identifies top selling product categories in each city using bars and word clouds.
+    """
     st.title("Q3: Regional Preferences (Top-3) ⛰️")
     explain_box(
         "Localization Analysis",
@@ -507,6 +520,10 @@ def page_q3_city_preferences():
 
 
 def page_q4_basket_size():
+    """
+    Renders the Q4: Basket Size Analysis page.
+    Compares the average number of items per transaction across cities.
+    """
     st.title("Q4: Average Basket Size 🛒")
     explain_box(
         "Store Efficiency",
@@ -545,6 +562,10 @@ def page_q4_basket_size():
 
 
 def page_q5_holidays():
+    """
+    Renders the Q5: Holiday Impact page.
+    Visualizes the difference between Local and National holiday sales.
+    """
     st.title("Q5: Local vs. National Holidays 🎊")
     explain_box(
         "Holiday Impact Analysis",
@@ -604,7 +625,8 @@ def page_q5_holidays():
     )
 def page_q6_cube():
     """
-    Renders the 'Geographic Hierarchy' page based on the SQL CUBE aggregation.
+    Renders the Q6: Geographic Hierarchy page using CUBE logic.
+    Allows drill-down from National -> State -> City levels.
     """
     st.title("Q6: Geographic Hierarchy (CUBE) 🧊")
     explain_box(
@@ -678,6 +700,10 @@ def page_q6_cube():
             st.warning("No city data found for this state.")
 
 def page_q7_seasonality():
+    """
+    Renders the Q7: Seasonality page.
+    Displays monthly sales trends and pivots by year.
+    """
     st.title("Q7: Seasonality (Pivot) 📈")
     explain_box(
         "Monthly Sales Trends",
@@ -721,12 +747,10 @@ def page_q7_seasonality():
 
 def page_q8_oil():
     """
-    Renders the Macro-Economic Analysis page (Oil Price vs. Sales).
-    Key Features:
-    - Data Enrichment: Merges external macroeconomic data (Oil) with internal sales data.
-    - Statistical Analysis: Calculates the Pearson correlation coefficient.
-    - Advanced Visualization: Uses a Dual-Axis chart (Matplotlib twinx) to plot two variables
-      with different scales (Sales in Millions vs. Oil Price in Dollars) on the same timeline.
+    Renders the Q8: Macro Analysis page (Oil Price vs. Sales).
+    Merges external macroeconomic data (Oil) with internal sales data.
+    Calculates the Pearson correlation coefficient.
+    Uses a Dual-Axis chart to plot two variables with different scales.
     """
     st.title("Q8: Macro Analysis - Oil vs. Sales 🛢️")
     explain_box(
@@ -800,6 +824,10 @@ def page_q8_oil():
     st.dataframe(styler, use_container_width=True, height=400)
 
 def page_feedback():
+    """
+    Renders the Feedback page.
+    Allows users to submit feedback and Admin users to manage/delete feedback.
+    """
     st.title("User Feedback 💬")
     explain_box(
         "We value your feedback",
